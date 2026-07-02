@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src https: data:;" />
+    <title>Cadence Mini</title>
+    <style>
+      * { box-sizing:border-box; }
+      html, body { margin:0; height:100%; background:transparent; overflow:hidden;
+        font-family:"Segoe UI",system-ui,sans-serif; -webkit-user-select:none; user-select:none; }
+      #card {
+        height:120px; margin:6px; border-radius:16px; background:rgba(18,18,21,.92);
+        backdrop-filter:blur(18px); border:1px solid rgba(255,255,255,.07);
+        box-shadow:0 16px 50px rgba(0,0,0,.5); display:flex; flex-direction:column; color:#f1f1f3;
+        -webkit-app-region:drag; position:relative;
+      }
+      #top { display:flex; gap:12px; padding:12px 12px 6px; align-items:center; }
+      #art { width:64px; height:64px; border-radius:10px; object-fit:cover; background:#26262b; flex:0 0 auto; }
+      #meta { min-width:0; flex:1; }
+      #title { font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      #artist { font-size:12px; color:#9aa0a6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+      #close { position:absolute; top:6px; right:8px; color:#6b6f78; font-size:14px; cursor:pointer; -webkit-app-region:no-drag; }
+      #close:hover { color:#fff; }
+      #bar { height:3px; margin:2px 14px; background:rgba(255,255,255,.12); border-radius:3px; -webkit-app-region:no-drag; }
+      #fill { height:100%; width:0%; background:#ff2d55; border-radius:3px; }
+      #ctrls { display:flex; align-items:center; justify-content:center; gap:18px; padding:6px 0 10px; -webkit-app-region:no-drag; }
+      button { background:none; border:0; color:#e9e9ee; cursor:pointer; padding:4px; border-radius:8px; display:flex; }
+      button:hover { color:#fff; background:rgba(255,255,255,.08); }
+      button svg { width:22px; height:22px; fill:currentColor; }
+      #play svg { width:30px; height:30px; }
+      .liked { color:#ff2d55 !important; }
+    </style>
+  </head>
+  <body>
+    <div id="card">
+      <span id="close" title="Close">✕</span>
+      <div id="top">
+        <img id="art" alt="" />
+        <div id="meta">
+          <div id="title">Nothing playing</div>
+          <div id="artist">—</div>
+        </div>
+      </div>
+      <div id="bar"><div id="fill"></div></div>
+      <div id="ctrls">
+        <button id="like" title="Like"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.2C.3 8.6 1.6 5 5 5c2 0 3.2 1.2 4 2.3C9.8 6.2 11 5 13 5c3.4 0 4.7 3.6 3 6.8C19.5 16.4 12 21 12 21z"/></svg></button>
+        <button id="prev" title="Previous"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+        <button id="play" title="Play/Pause"><svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+        <button id="next" title="Next"><svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 6l8.5 6L6 18z"/></svg></button>
+      </div>
+    </div>
+    <script>
+      const C = window.cadence;
+      const $ = (id) => document.getElementById(id);
+      const ICON_PLAY = '<path d="M8 5v14l11-7z"/>';
+      const ICON_PAUSE = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+
+      function paint(s) {
+        $('title').textContent = s.hasSong ? (s.title || 'Unknown') : 'Nothing playing';
+        $('artist').textContent = s.hasSong ? (s.artist || '') : '—';
+        if (s.artworkUrl && $('art').src !== s.artworkUrl) $('art').src = s.artworkUrl;
+        $('playIcon').innerHTML = (s.hasSong && !s.isPaused) ? ICON_PAUSE : ICON_PLAY;
+        const pct = s.duration ? Math.min(100, (s.currentTime / s.duration) * 100) : 0;
+        $('fill').style.width = pct + '%';
+        $('like').classList.toggle('liked', s.liked === 'LIKE');
+      }
+
+      $('play').onclick = () => C.control('playPause');
+      $('next').onclick = () => C.control('next');
+      $('prev').onclick = () => C.control('previous');
+      $('like').onclick = () => C.control('like');
+      $('close').onclick = () => C.toggleMini();
+      $('bar').onclick = (e) => {
+        const r = $('bar').getBoundingClientRect();
+        const ratio = (e.clientX - r.left) / r.width;
+        C.getState().then(s => { if (s.duration) C.control('seek', ratio * s.duration); });
+      };
+
+      C.onState(paint);
+      C.getState().then(paint);
+    </script>
+  </body>
+</html>

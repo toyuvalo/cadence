@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+    <title>Cadence — Settings</title>
+    <style>
+      :root { --bg:#0b0b0d; --card:#161619; --fg:#f1f1f3; --muted:#8b8f98; --accent:#ff2d55; --line:#26262b; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--fg); font-family:"Segoe UI",system-ui,sans-serif; font-size:14px; }
+      header { padding:20px 24px 8px; }
+      header h1 { margin:0; font-size:18px; }
+      header .ver { color:var(--muted); font-size:12px; margin-top:2px; }
+      main { padding:8px 24px 40px; }
+      .group { background:var(--card); border:1px solid var(--line); border-radius:14px; margin:14px 0; overflow:hidden; }
+      .group > h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0; padding:14px 16px 8px; }
+      .row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:11px 16px; border-top:1px solid var(--line); }
+      .row:first-of-type { border-top:0; }
+      .row .label { display:flex; flex-direction:column; gap:2px; }
+      .row .label small { color:var(--muted); font-size:12px; }
+      .switch { position:relative; width:42px; height:24px; flex:0 0 auto; }
+      .switch input { opacity:0; width:0; height:0; }
+      .slider { position:absolute; inset:0; background:#3a3a42; border-radius:999px; transition:.15s; cursor:pointer; }
+      .slider:before { content:""; position:absolute; width:18px; height:18px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.15s; }
+      input:checked + .slider { background:var(--accent); }
+      input:checked + .slider:before { transform:translateX(18px); }
+      select, input[type=number], input[type=text] {
+        background:#1e1e22; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:13px; min-width:90px;
+      }
+      input[type=range] { width:140px; accent-color:var(--accent); }
+      .diag { font-size:12px; color:var(--muted); line-height:1.7; }
+      .diag b { color:var(--fg); font-weight:600; }
+      a { color:var(--accent); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Cadence Settings</h1>
+      <div class="ver" id="ver">—</div>
+    </header>
+    <main id="app"><!-- built by JS --></main>
+
+    <script>
+      const C = window.cadence;
+      let cfg = null;
+      let info = null;
+
+      const SCHEMA = [
+        { title: 'General', items: [
+          ['general.minimizeToTray', 'switch', 'Minimize to tray', 'Hide to the system tray instead of the taskbar.'],
+          ['general.closeToTray', 'switch', 'Close to tray', 'Keep playing in the background when you press ✕.'],
+          ['general.startMinimized', 'switch', 'Start minimized', 'Launch hidden in the tray.'],
+          ['general.restoreLastTrack', 'switch', 'Restore last track', 'Reopen where you left off after a restart/crash.'],
+        ]},
+        { title: 'Resilience', items: [
+          ['resilience.autoRecover', 'switch', 'Auto-recover from crashes', 'Reload automatically when the music view or audio service dies.'],
+          ['resilience.watchdogEnabled', 'switch', 'Watchdog', 'Detect a hung or blank window and revive it.'],
+          ['resilience.maxReloadAttempts', 'number', 'Max recovery attempts', 'Give up (and offer a manual retry) after this many tries.'],
+        ]},
+        { title: 'Playback features', items: [
+          ['features.skipDisabledAds', 'switch', 'Auto-skip ads', 'Skip / fast-forward video ads automatically.'],
+          ['features.hideAds', 'switch', 'Hide promos', 'CSS-hide upsell banners and promo cards.'],
+        ]},
+        { title: 'Appearance', items: [
+          ['appearance.zoom', 'range', 'Zoom', 'Interface zoom level (50–200%).', { min:50, max:200, step:5, suffix:'%' }],
+          ['appearance.theme', 'select', 'Theme (app chrome)', 'Affects Cadence windows, not YouTube Music itself.', { options:['system','dark','light'] }],
+        ]},
+        { title: 'Integrations', items: [
+          ['integrations.notificationsOnTrackChange', 'switch', 'Track-change notifications', 'Toast with album art when the song changes.'],
+          ['integrations.discordRPC', 'switch', 'Discord Rich Presence', 'Show what you’re listening to on Discord. Needs a Discord app id.'],
+          ['integrations.lastFmEnabled', 'switch', 'Last.fm scrobbling', 'Requires LASTFM_* environment variables (credentials never stored on disk).'],
+        ]},
+      ];
+
+      function getPath(o, p) { return p.split('.').reduce((a,k)=>a==null?a:a[k], o); }
+
+      function row([path, type, label, help, opts]) {
+        const val = getPath(cfg, path);
+        const wrap = document.createElement('div'); wrap.className='row';
+        const left = document.createElement('div'); left.className='label';
+        left.innerHTML = `<span>${label}</span><small>${help}</small>`;
+        wrap.appendChild(left);
+        let ctrl;
+        if (type==='switch') {
+          ctrl = document.createElement('label'); ctrl.className='switch';
+          ctrl.innerHTML = `<input type="checkbox" ${val?'checked':''}><span class="slider"></span>`;
+          ctrl.querySelector('input').addEventListener('change', e => save(path, e.target.checked));
+        } else if (type==='number') {
+          ctrl = document.createElement('input'); ctrl.type='number'; ctrl.value=val; ctrl.min=1; ctrl.max=50;
+          ctrl.addEventListener('change', e => save(path, parseInt(e.target.value,10)||1));
+        } else if (type==='range') {
+          ctrl = document.createElement('div'); ctrl.style.display='flex'; ctrl.style.alignItems='center'; ctrl.style.gap='10px';
+          const r=document.createElement('input'); r.type='range'; r.min=opts.min; r.max=opts.max; r.step=opts.step; r.value=val;
+          const o=document.createElement('span'); o.style.color='var(--muted)'; o.style.minWidth='44px'; o.textContent=val+(opts.suffix||'');
+          r.addEventListener('input', e => { o.textContent=e.target.value+(opts.suffix||''); });
+          r.addEventListener('change', e => save(path, parseInt(e.target.value,10)));
+          ctrl.appendChild(r); ctrl.appendChild(o);
+        } else if (type==='select') {
+          ctrl = document.createElement('select');
+          opts.options.forEach(op => { const e=document.createElement('option'); e.value=op; e.textContent=op; if(op===val)e.selected=true; ctrl.appendChild(e); });
+          ctrl.addEventListener('change', e => save(path, e.target.value));
+        }
+        wrap.appendChild(ctrl);
+        return wrap;
+      }
+
+      function save(path, value) {
+        const keys = path.split('.'); const patch = {}; let node=patch;
+        keys.forEach((k,i)=>{ if(i===keys.length-1) node[k]=value; else { node[k]={}; node=node[k]; } });
+        C.setConfig(patch).then(updated => { cfg = updated; });
+      }
+
+      function render() {
+        const app = document.getElementById('app'); app.innerHTML='';
+        for (const g of SCHEMA) {
+          const sec=document.createElement('section'); sec.className='group';
+          const h=document.createElement('h2'); h.textContent=g.title; sec.appendChild(h);
+          g.items.forEach(it => sec.appendChild(row(it)));
+          app.appendChild(sec);
+        }
+        const about=document.createElement('section'); about.className='group';
+        about.innerHTML = `<h2>About</h2><div class="row"><div class="diag">
+          <b>${info.name}</b> v${info.version}<br>
+          Electron <b>${info.electron}</b> · Chromium <b>${info.chrome}</b> · Node <b>${info.node}</b><br>
+          A resilient YouTube Music desktop client. Auto-recovers from renderer, audio-service and blank-page failures.
+        </div></div>`;
+        app.appendChild(about);
+      }
+
+      Promise.all([C.getConfig(), C.getInfo()]).then(([c, i]) => {
+        cfg=c; info=i; document.getElementById('ver').textContent = `v${i.version} · Electron ${i.electron} · Chromium ${i.chrome}`;
+        render();
+      });
+      C.onConfigChanged(c => { cfg=c; });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+    <title>Cadence</title>
+    <style>
+      :root {
+        --bg: #030303;
+        --fg: #f1f1f1;
+        --muted: #9aa0a6;
+        --accent: #ff2d55;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+        font-family: "Segoe UI", system-ui, sans-serif; overflow: hidden;
+        -webkit-user-select: none; user-select: none;
+      }
+      #toolbar {
+        position: fixed; top: 0; left: 0; right: 0; height: 40px; z-index: 5;
+        display: flex; align-items: center; gap: 2px; padding: 0 8px;
+        background: #0a0a0a; border-bottom: 1px solid rgba(255, 255, 255, .06);
+        -webkit-app-region: drag;
+      }
+      #toolbar button {
+        -webkit-app-region: no-drag; width: 32px; height: 28px; padding: 0; margin: 0;
+        background: transparent; border: 0; border-radius: 7px; color: #cfcfd4;
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+      }
+      #toolbar button:hover { background: rgba(255, 255, 255, .09); color: #fff; }
+      #toolbar button:active { background: rgba(255, 255, 255, .15); }
+      #toolbar button svg { width: 19px; height: 19px; fill: currentColor; }
+      #toolbar .wordmark {
+        margin-left: 8px; font-size: 11px; font-weight: 700; letter-spacing: .16em;
+        text-transform: uppercase; color: #6b6f78;
+      }
+      #overlay {
+        position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 22px;
+        background: radial-gradient(120% 120% at 50% 30%, #141416 0%, #030303 70%);
+      }
+      .logo {
+        width: 84px; height: 84px; border-radius: 22px;
+        background: linear-gradient(135deg, #ff2d55, #7a1fff);
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 18px 60px rgba(255, 45, 85, 0.25);
+      }
+      .logo svg { width: 46px; height: 46px; }
+      .bars { display: flex; gap: 5px; align-items: flex-end; height: 30px; }
+      .bars i {
+        width: 5px; background: #fff; border-radius: 3px; animation: pulse 1s ease-in-out infinite;
+      }
+      .bars i:nth-child(1) { height: 40%; animation-delay: 0s; }
+      .bars i:nth-child(2) { height: 90%; animation-delay: .15s; }
+      .bars i:nth-child(3) { height: 60%; animation-delay: .3s; }
+      .bars i:nth-child(4) { height: 100%; animation-delay: .45s; }
+      .bars i:nth-child(5) { height: 50%; animation-delay: .6s; }
+      @keyframes pulse { 0%,100% { transform: scaleY(.4); opacity:.7;} 50% { transform: scaleY(1); opacity:1;} }
+      h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: .2px; }
+      p { color: var(--muted); margin: 0; font-size: 14px; max-width: 360px; text-align: center; line-height: 1.5; }
+      button {
+        margin-top: 6px; background: var(--accent); color: #fff; border: 0; cursor: pointer;
+        padding: 10px 22px; border-radius: 999px; font-size: 14px; font-weight: 600;
+      }
+      button:hover { filter: brightness(1.08); }
+      .hidden { display: none !important; }
+      .spinner {
+        width: 26px; height: 26px; border: 3px solid rgba(255,255,255,.15);
+        border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div id="toolbar">
+      <button id="nav-back" title="Back (Alt+←)" aria-label="Back">
+        <svg viewBox="0 0 24 24"><path d="M15.4 4.4 8 12l7.4 7.6 1.4-1.4L10.8 12l6-6.2z" /></svg>
+      </button>
+      <button id="nav-fwd" title="Forward (Alt+→)" aria-label="Forward">
+        <svg viewBox="0 0 24 24"><path d="M8.6 4.4 16 12l-7.4 7.6-1.4-1.4L13.2 12l-6-6.2z" /></svg>
+      </button>
+      <span class="wordmark">Cadence</span>
+    </div>
+    <div id="overlay">
+      <div class="logo">
+        <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+      <h1 id="title">Starting Cadence…</h1>
+      <p id="detail">Connecting to YouTube Music.</p>
+      <div id="spin" class="spinner"></div>
+      <button id="retry" class="hidden">Retry now</button>
+    </div>
+    <script>
+      const titleEl = document.getElementById('title');
+      const detailEl = document.getElementById('detail');
+      const retryEl = document.getElementById('retry');
+      const spinEl = document.getElementById('spin');
+      const overlayEl = document.getElementById('overlay');
+
+      const COPY = {
+        starting: ['Starting Cadence…', 'Connecting to YouTube Music.'],
+        ok: ['', ''],
+        recovering: ['Reconnecting…', 'YouTube Music hiccuped — bringing it back. Your music will resume.'],
+        unresponsive: ['Waking things up…', 'The music view stopped responding. Recovering automatically.'],
+        'audio-recovering': ['Re-syncing audio…', 'The audio service restarted. Re-establishing playback.'],
+        error: ['Reconnecting…', 'A load error occurred. Retrying automatically.'],
+        fatal: ['Couldn’t reconnect', 'Recovery hit its retry limit. Click below to try again.'],
+      };
+
+      function apply(status, detail) {
+        const [t, d] = COPY[status] || COPY.recovering;
+        titleEl.textContent = t || 'Cadence';
+        detailEl.textContent = detail || d;
+        const showRetry = status === 'fatal';
+        retryEl.classList.toggle('hidden', !showRetry);
+        spinEl.classList.toggle('hidden', showRetry || status === 'ok');
+        // Hide the whole overlay once loaded so the toolbar + music show through.
+        overlayEl.style.display = status === 'ok' ? 'none' : 'flex';
+      }
+
+      retryEl.addEventListener('click', () => {
+        window.cadence.retryNow();
+        apply('recovering', 'Retrying…');
+      });
+
+      document.getElementById('nav-back').addEventListener('click', () => window.cadence && window.cadence.control('back'));
+      document.getElementById('nav-fwd').addEventListener('click', () => window.cadence && window.cadence.control('forward'));
+
+      if (window.cadence) {
+        window.cadence.onSupervisorStatus(({ status, detail }) => apply(status, detail));
+        window.cadence.getInfo().then((info) => {
+          if (info) document.title = `${info.name} ${info.version}`;
+        });
+      }
+    </script>
+  </body>
+</html>
