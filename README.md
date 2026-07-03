@@ -8,6 +8,18 @@ brick other desktop wrappers (renderer crashes, the Chromium audio-service
 heap-crash, detached player hooks, and blank/aborted page loads). On top of that
 it adds the integrations a good music client should have.
 
+## Install
+
+Grab **`Cadence-Setup-<version>.exe`** from the
+[latest release](https://github.com/toyuvalo/cadence/releases/latest) and run it.
+It installs per-user (no admin needed) and adds Start menu + desktop shortcuts.
+
+Cadence is a standalone app: closing the window sends it to the system tray and
+music keeps playing. To exit fully, right-click the tray icon → **Quit Cadence**.
+
+> `npm start` is for development only — it ties the app's lifetime to the
+> terminal that launched it. For everyday listening, use the installed app.
+
 ## Why it exists
 
 Diagnosed from a real YTMDesktop `main.log`, three unrecovered failures:
