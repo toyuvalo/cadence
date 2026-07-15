@@ -7,7 +7,7 @@
 const APP_NAME = 'Cadence';
 // Version is duplicated in package.json (the build authority). Keep them in sync
 // on every release — this constant is what the UI/tray/about screen displays.
-const APP_VERSION = '1.0.5';
+const APP_VERSION = '1.0.6';
 
 const YTM_URL = 'https://music.youtube.com/';
 const YTM_ORIGIN = 'https://music.youtube.com';

@@ -2,7 +2,7 @@
 
 All notable changes to Cadence are documented here.
 
-## [1.0.5] — 2026-07-15
+## [1.0.6] — 2026-07-15
 
 ### Changed
 - **Minimize stays in the taskbar.** Minimizing no longer hides Cadence to the
