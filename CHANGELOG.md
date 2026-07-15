@@ -22,6 +22,16 @@ All notable changes to Cadence are documented here.
   first paint) and the icons are cached, so they no longer thrash the taskbar on
   every playback tick — only the middle button flips when play/pause changes.
 
+### Notes
+- **Thumbnail-toolbar buttons need Cadence to run at the same integrity level as
+  Explorer.** If Cadence is launched *elevated* ("Run as administrator", or from
+  an elevated shell), Windows UIPI blocks the (Medium-integrity) taskbar from
+  delivering the button-click messages — the buttons render but do nothing.
+  Launch Cadence normally (Medium integrity) and they work. This is a Windows
+  security rule, not something the app can override from JavaScript.
+- Added an opt-in diagnostic log: launch with the env var `CADENCE_DIAG=1` to
+  append a command trace to `%TEMP%\cadence-diag.log`. No-op otherwise.
+
 ## [1.0.3] — 2026-07-02
 
 ### Added
