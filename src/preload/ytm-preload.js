@@ -9,6 +9,17 @@
 
 const { ipcRenderer } = require('electron');
 
+// Opt-in diagnostic (CADENCE_DIAG=1) — mirrors src/shared/diag.js but inlined so
+// the preload has no cross-module/asar dependency. Writes to <tmp>/cadence-diag.log.
+const DIAG = process.env.CADENCE_DIAG === '1';
+function diagFile(msg) {
+  if (!DIAG) return;
+  try {
+    const p = require('path').join(require('os').tmpdir(), 'cadence-diag.log');
+    require('fs').appendFileSync(p, `[${new Date().toISOString()}] preload: ${msg}\n`);
+  } catch {}
+}
+
 const IPC = {
   STATE: 'ytm:state',
   READY: 'ytm:ready',
@@ -46,8 +57,10 @@ function clickFirst(selectors, label) {
   const el = pick(selectors);
   if (el) {
     el.click();
+    diagFile(`clickFirst "${label}" -> clicked ${el.tagName}.${el.className || ''}`);
     return true;
   }
+  diagFile(`clickFirst "${label}" -> NO ELEMENT for ${JSON.stringify(selectors)}`);
   log(`control "${label}" found no element`);
   return false;
 }
@@ -188,6 +201,7 @@ function injectAdCss() {
 function handleCommand(_e, payload) {
   const { action, value } = payload || {};
   const v = getVideo();
+  diagFile(`recv ${action} (video=${!!v}, paused=${v ? v.paused : 'n/a'})`);
   try {
     switch (action) {
       case 'play':

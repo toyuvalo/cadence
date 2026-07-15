@@ -4,6 +4,7 @@ const path = require('path');
 const { globalShortcut, nativeImage } = require('electron');
 const { hub } = require('./hub');
 const config = require('./config');
+const { diag } = require('../shared/diag');
 
 // Maps the configurable accelerators to player commands. Registering the OS
 // media keys (MediaPlayPause etc.) is what makes keyboard/headset buttons work.
@@ -87,9 +88,9 @@ function applyThumbar(force) {
 
   try {
     const ok = win.setThumbarButtons([
-      { tooltip: 'Previous', icon: set.prev, click: () => hub.sendCommand('previous') },
-      { tooltip: isPlaying ? 'Pause' : 'Play', icon: isPlaying ? set.pause : set.play, click: () => hub.sendCommand('playPause') },
-      { tooltip: 'Next', icon: set.next, click: () => hub.sendCommand('next') },
+      { tooltip: 'Previous', icon: set.prev, click: () => { diag('thumbar click: previous'); hub.sendCommand('previous'); } },
+      { tooltip: isPlaying ? 'Pause' : 'Play', icon: isPlaying ? set.pause : set.play, click: () => { diag('thumbar click: playPause'); hub.sendCommand('playPause'); } },
+      { tooltip: 'Next', icon: set.next, click: () => { diag('thumbar click: next'); hub.sendCommand('next'); } },
     ]);
     lastKey = key;
     // eslint-disable-next-line no-console

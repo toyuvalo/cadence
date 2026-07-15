@@ -3,6 +3,7 @@
 const { ipcMain } = require('electron');
 const { EventEmitter } = require('events');
 const config = require('./config');
+const { diag } = require('../shared/diag');
 
 // Channel literals kept in lockstep with app-preload.js / ytm-preload.js.
 const CH = {
@@ -81,6 +82,7 @@ class Hub extends EventEmitter {
       return;
     }
     const wc = this._getYtmWC && this._getYtmWC();
+    diag(`hub.sendCommand ${action} -> wc=${wc ? (wc.isDestroyed() ? 'destroyed' : 'ok#' + wc.id) : 'null'}`);
     if (!wc || wc.isDestroyed()) return;
 
     // Browser-style history navigation for the toolbar back/forward buttons.
