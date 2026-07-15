@@ -1,7 +1,7 @@
 {
   "name": "cadence",
   "productName": "Cadence",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "description": "Cadence — a resilient YouTube Music desktop client that stays up.",
   "author": "DVLCE",
   "license": "MIT",
@@ -35,7 +35,12 @@
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "assets/icons/icon.ico"
     },

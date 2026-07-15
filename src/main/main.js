@@ -109,17 +109,26 @@ function bootstrap() {
       nativeTheme.themeSource = cfg.appearance.theme || 'system';
     });
 
-    // --- close-to-tray ------------------------------------------------------
+    // --- close / minimize behaviour -----------------------------------------
+    // Minimize now ALWAYS stays in the taskbar (we no longer hide-to-tray on
+    // minimize) so the taskbar-thumbnail media controls — Previous / Play-Pause
+    // / Next, set up in mediaControls.js — are reachable on hover.
+    //
+    // Pressing ✕:
+    //   • music playing   -> shrink into the mini player and keep audio alive
+    //     (as long as `closeToTray` is on, which is the default).
+    //   • nothing playing -> quit for real.
     win.on('close', (e) => {
-      if (!app.isQuitting && config.get('general.closeToTray', true)) {
+      if (app.isQuitting) return; // an explicit Quit is already underway
+      const st = hub.latest || {};
+      const isPlaying = !!(st.hasSong && !st.isPaused);
+      if (isPlaying && config.get('general.closeToTray', true)) {
         e.preventDefault();
         win.hide();
-      }
-    });
-    win.on('minimize', (e) => {
-      if (config.get('general.minimizeToTray', true)) {
-        e.preventDefault();
-        win.hide();
+        miniPlayer.open();
+      } else {
+        app.isQuitting = true;
+        app.quit();
       }
     });
 

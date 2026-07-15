@@ -7,7 +7,7 @@
 const APP_NAME = 'Cadence';
 // Version is duplicated in package.json (the build authority). Keep them in sync
 // on every release — this constant is what the UI/tray/about screen displays.
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.0.4';
 
 const YTM_URL = 'https://music.youtube.com/';
 const YTM_ORIGIN = 'https://music.youtube.com';
@@ -64,8 +64,9 @@ const LIKE = { LIKE: 'LIKE', DISLIKE: 'DISLIKE', INDIFFERENT: 'INDIFFERENT' };
 const DEFAULT_CONFIG = {
   general: {
     startMinimized: false,
-    minimizeToTray: true,
-    closeToTray: true,
+    // Minimize always stays in the taskbar (so the thumbnail-toolbar media
+    // controls work on hover); there is no longer a minimize-to-tray option.
+    closeToTray: true, // ✕ while playing shrinks to the mini player instead of quitting
     startOnBoot: false,
     restoreLastTrack: true,
   },
