@@ -8,11 +8,19 @@ All notable changes to Cadence are documented here.
 - **Minimize stays in the taskbar.** Minimizing no longer hides Cadence to the
   system tray, so the Windows taskbar-thumbnail media controls (Previous /
   Play-Pause / Next) are now reachable by hovering the taskbar button. The
-  separate "Minimize to tray" setting has been removed.
+  separate "Minimize to tray" setting has been removed. (This was the real
+  reason the hover controls "didn't work" — a hidden window has no taskbar
+  button to hover.)
 - **Smarter ✕ (close) behaviour.** Pressing ✕ while music is playing now shrinks
   Cadence into the always-on-top mini player and keeps audio going; pressing ✕
   while nothing is playing quits the app for good. The "Close to tray" toggle is
   now "Shrink to mini player on close" and gates this behaviour.
+
+### Fixed
+- **Thumbnail-toolbar buttons are now applied reliably.** The prev/play-pause/
+  next buttons are (re)asserted on window show / restore (plus a one-shot after
+  first paint) and the icons are cached, so they no longer thrash the taskbar on
+  every playback tick — only the middle button flips when play/pause changes.
 
 ## [1.0.3] — 2026-07-02
 
