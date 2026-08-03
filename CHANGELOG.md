@@ -2,7 +2,7 @@
 
 All notable changes to Cadence are documented here.
 
-## [1.0.7] — 2026-08-03
+## [1.0.8] — 2026-08-03
 
 ### Security
 - Bumped `electron-builder` (build-time only, not shipped in the app) from
