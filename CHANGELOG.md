@@ -2,6 +2,20 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.0.7] — 2026-08-03
+
+### Security
+- Bumped `electron-builder` (build-time only, not shipped in the app) from
+  `25.1.8` to `26.15.7`, which pulls in patched `app-builder-lib` (26.15.0+)
+  and `builder-util-runtime` (9.7.0+), resolving high-severity advisories.
+- Resolved transitive `tar` and `brace-expansion` advisories via the
+  `electron-builder` bump.
+- Added an `overrides` pin for `fast-uri` (3.1.4) to close a host-confusion
+  advisory in the `ajv` dependency chain.
+- `electron` itself remains on the 33.x line pending a dedicated major-version
+  upgrade with full QA — see repo security notes for the list of outstanding
+  advisories that require an Electron major bump.
+
 ## [1.0.6] — 2026-07-15
 
 ### Changed
