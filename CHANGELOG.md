@@ -26,10 +26,18 @@ All notable changes to Cadence are documented here.
   `globalShortcut`, audio plays continuously across a track change, and the
   tray, taskbar thumbnail toolbar, mini player, and settings window all work.
 - `extract-zip` (CVE-2026-56876, high) has no upstream fix on the 39 line and
-  stays open. It is reached only via the `electron` npm package's install-time
-  downloader and is **not** present in the packaged `app.asar`. Electron
-  `40.10.6` / `41.7.2`+ replace it with `@electron-internal/extract-zip`, so a
-  future move to a supported line resolves it outright.
+  stays open (dismissed as `not_used`). It is reached only via the `electron` npm
+  package's install-time downloader and is **not** present in the packaged
+  `app.asar`.
+  A future Electron upgrade resolves it outright, but the replacement with
+  `@electron-internal/extract-zip` was backported **per release line and out of
+  order**, so the target must be pinned by exact version, not by major:
+  - clean: `40.10.6`, **`41.7.2`+**, **`42.4.0`+**, and all of **43.x**
+  - still vulnerable: all of 39.x, `41.0.0`–`41.7.1`, and **`42.0.0`–`42.3.1`**
+
+  Landing anywhere in 42.0–42.3 would keep the CVE open. Verify the exact
+  intended version with `npm view electron@<version> dependencies` before
+  upgrading — version ordering does not imply security ordering here.
 
 ## [1.0.8] — 2026-08-03
 
