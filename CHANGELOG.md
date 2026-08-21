@@ -31,13 +31,19 @@ All notable changes to Cadence are documented here.
   `app.asar`.
   A future Electron upgrade resolves it outright, but the replacement with
   `@electron-internal/extract-zip` was backported **per release line and out of
-  order**, so the target must be pinned by exact version, not by major:
-  - clean: `40.10.6`, **`41.7.2`+**, **`42.4.0`+**, and all of **43.x**
-  - still vulnerable: all of 39.x, `41.0.0`–`41.7.1`, and **`42.0.0`–`42.3.1`**
+  order**, so the target must be pinned by exact version, not by major. Boundaries
+  below are from an exhaustive check of all 119 stable releases in lines 39–43:
+  - clean from: **`40.10.3`**, **`41.7.2`**, **`42.4.0`**, **`43.0.0`**
+  - still vulnerable: all of 39.x (incl. tip `39.8.10`), `40.0.0`–`40.10.2`,
+    `41.0.0`–`41.7.1`, and **`42.0.0`–`42.3.3`**
 
-  Landing anywhere in 42.0–42.3 would keep the CVE open. Verify the exact
-  intended version with `npm view electron@<version> dependencies` before
-  upgrading — version ordering does not imply security ordering here.
+  Each line is monotonic once it turns clean, so a `^` range at or above a
+  boundary is safe. Recommended target: **43.x** (`latest`, and inside Electron's
+  supported window of the newest three majors). Landing anywhere in
+  `42.0.0`–`42.3.3` would keep the CVE open — note that range post-dates the
+  already-clean `41.7.2`, so a higher version is not necessarily a safer one.
+  Verify the exact intended version with
+  `npm view electron@<version> dependencies` before upgrading.
 
 ## [1.0.8] — 2026-08-03
 
