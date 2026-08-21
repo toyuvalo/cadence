@@ -1,7 +1,7 @@
 {
   "name": "cadence",
   "productName": "Cadence",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "Cadence — a resilient YouTube Music desktop client that stays up.",
   "author": "DVLCE",
   "license": "MIT",
@@ -17,11 +17,11 @@
     "electron-store": "^8.2.0"
   },
   "devDependencies": {
-    "electron": "^33.2.1",
+    "electron": "^39.8.10",
     "electron-builder": "^26.15.7"
   },
   "overrides": {
-    "fast-uri": "3.1.4"
+    "fast-uri": "3.1.5"
   },
   "build": {
     "appId": "ca.dvlce.cadence",

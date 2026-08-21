@@ -2,6 +2,35 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.1.0] — 2026-08-21
+
+### Security
+- **Electron `33.4.11` → `39.8.10`** (Chromium 130 → 142). This is the dedicated
+  major-version upgrade deferred in 1.0.8 and it closes **47** open Dependabot
+  advisories — CVE-2026-70597…70612, CVE-2026-34764…34781, and CVE-2025-55305 —
+  spanning high, medium, and low severity.
+- Raised the `fast-uri` `overrides` pin from `3.1.4` to `3.1.5`, closing
+  CVE-2026-18446 (high). This one **is** shipped at runtime: it reaches the
+  packaged `app.asar` through `electron-store → conf → ajv → fast-uri`.
+
+### Notes
+- No source changes were required for the upgrade. The main process was already
+  on the modern APIs the 34→39 breaking changes target — `WebContentsView`
+  (never `BrowserView`, removed in 37) and `webContents.navigationHistory`.
+- The Electron 36 `app.commandLine` change lowercases switch *names*, not
+  *values*, so `appendSwitch('disable-features', 'HardwareMediaKeyHandling')`
+  still reaches Chromium intact and the media-key handling is unaffected.
+  Verified by reading the value back at runtime under 39.8.10.
+- Verified by launching the app: YTM loads and renders logged-in, the preload
+  bridge attaches to `<video>`, the OS media keys drive play/pause through
+  `globalShortcut`, audio plays continuously across a track change, and the
+  tray, taskbar thumbnail toolbar, mini player, and settings window all work.
+- `extract-zip` (CVE-2026-56876, high) has no upstream fix on the 39 line and
+  stays open. It is reached only via the `electron` npm package's install-time
+  downloader and is **not** present in the packaged `app.asar`. Electron
+  `40.10.6` / `41.7.2`+ replace it with `@electron-internal/extract-zip`, so a
+  future move to a supported line resolves it outright.
+
 ## [1.0.8] — 2026-08-03
 
 ### Security
