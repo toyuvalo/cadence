@@ -1,7 +1,7 @@
 {
   "name": "cadence",
   "productName": "Cadence",
-  "version": "1.2.1",
+  "version": "1.3.1",
   "description": "Cadence — a resilient YouTube Music desktop client that stays up.",
   "author": "DVLCE",
   "license": "MIT",
@@ -11,10 +11,12 @@
     "dev": "electron . --dev",
     "dist": "electron-builder --win",
     "dist:dir": "electron-builder --win --dir",
+    "release": "electron-builder --win --publish always",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
-    "electron-store": "^8.2.0"
+    "electron-store": "^8.2.0",
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "electron": "^39.8.10",
@@ -25,6 +27,14 @@
   },
   "build": {
     "appId": "ca.dvlce.cadence",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "toyuvalo",
+        "repo": "cadence",
+        "releaseType": "release"
+      }
+    ],
     "productName": "Cadence",
     "copyright": "Copyright © 2026 DVLCE",
     "directories": {
@@ -37,6 +47,7 @@
       "!**/*.map"
     ],
     "win": {
+      "artifactName": "${productName}-Setup-${version}.${ext}",
       "target": [
         {
           "target": "nsis",

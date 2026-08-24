@@ -18,6 +18,22 @@ function truncate(s, n) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
+// The updater entry doubles as its own status readout, so the tray always tells
+// the truth about where an update got to without needing a separate window.
+function updateMenuLabel() {
+  const u = hub._update.getState();
+  if (u.status === 'ready') return `Restart to install ${u.version}`;
+  if (u.status === 'downloading') return `Downloading update… ${u.percent}%`;
+  if (u.status === 'checking') return 'Checking for updates…';
+  return 'Check for updates…';
+}
+
+function updateMenuClick() {
+  const u = hub._update.getState();
+  if (u.status === 'ready') hub._update.onInstall();
+  else if (u.status !== 'downloading' && u.status !== 'checking') hub._update.onCheck();
+}
+
 function buildMenu(state) {
   const playing = state && state.hasSong;
   const nowLabel = playing
@@ -39,6 +55,7 @@ function buildMenu(state) {
     { label: 'Mini Player', click: () => hub._onToggleMini() },
     { label: 'Lyrics', click: () => hub._onToggleLyrics() },
     { label: 'Settings…', click: () => hub._onOpenSettings() },
+    { label: updateMenuLabel(), click: () => updateMenuClick() },
     { type: 'separator' },
     {
       label: 'Show / Hide',
@@ -96,6 +113,8 @@ function create() {
   });
 
   hub.on('state', (state) => update(state));
+  // Rebuild on updater progress too, so the menu's status line stays live.
+  hub.on('update', () => update(hub.latest));
   return tray;
 }
 

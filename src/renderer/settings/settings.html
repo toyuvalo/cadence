@@ -71,6 +71,12 @@
           ['appearance.zoom', 'range', 'Zoom', 'Interface zoom level (50–200%).', { min:50, max:200, step:5, suffix:'%' }],
           ['appearance.theme', 'select', 'Theme (app chrome)', 'Affects Cadence windows, not YouTube Music itself.', { options:['system','dark','light'] }],
         ]},
+        { title: 'Updates', items: [
+          ['updates.autoCheck', 'switch', 'Check for updates automatically', 'Look for new versions in the background.'],
+          ['updates.autoDownload', 'switch', 'Download automatically', 'Fetch the update as soon as one is found.'],
+          ['updates.installOnQuit', 'switch', 'Install on quit', 'Apply a downloaded update when you close Cadence — never mid-song.'],
+          ['updates.checkIntervalHours', 'number', 'Check every (hours)', 'How often to look while the app is running.'],
+        ]},
         { title: 'Integrations', items: [
           ['integrations.notificationsOnTrackChange', 'switch', 'Track-change notifications', 'Toast with album art when the song changes.'],
           ['integrations.discordRPC', 'switch', 'Discord Rich Presence', 'Show what you’re listening to on Discord. Needs a Discord app id.'],
@@ -125,13 +131,73 @@
           app.appendChild(sec);
         }
         const about=document.createElement('section'); about.className='group';
-        about.innerHTML = `<h2>About</h2><div class="row"><div class="diag">
+        about.innerHTML = `<h2>About</h2>
+        <div class="row">
+          <div class="label"><span id="upd-line">Cadence ${info.version}</span><small id="upd-sub">Up to date as far as we know.</small></div>
+          <button id="upd-btn" style="background:var(--accent);color:#fff;border:0;border-radius:999px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer">Check now</button>
+        </div>
+        <div class="row"><div class="diag">
           <b>${info.name}</b> v${info.version}<br>
           Electron <b>${info.electron}</b> · Chromium <b>${info.chrome}</b> · Node <b>${info.node}</b><br>
           A resilient YouTube Music desktop client. Auto-recovers from renderer, audio-service and blank-page failures.
         </div></div>`;
         app.appendChild(about);
+        wireUpdates();
       }
+
+      // --- update panel ---------------------------------------------------
+      function paintUpdate(u) {
+        const line = document.getElementById('upd-line');
+        const sub = document.getElementById('upd-sub');
+        const btn = document.getElementById('upd-btn');
+        if (!line || !btn) return;
+        const S = u.status;
+        btn.style.display = 'inline-block';
+        btn.disabled = (S === 'checking' || S === 'downloading');
+        btn.style.opacity = btn.disabled ? '.6' : '1';
+        if (S === 'ready') {
+          line.textContent = `Cadence ${u.version} is ready to install`;
+          sub.textContent = 'It applies when you quit — or restart now.';
+          btn.textContent = 'Restart now';
+        } else if (S === 'downloading') {
+          line.textContent = `Downloading ${u.version || 'update'}…`;
+          sub.textContent = `${u.percent}% complete`;
+          btn.textContent = 'Downloading…';
+        } else if (S === 'checking') {
+          line.textContent = 'Checking for updates…';
+          sub.textContent = '';
+          btn.textContent = 'Checking…';
+        } else if (S === 'available') {
+          line.textContent = `Cadence ${u.version} is available`;
+          sub.textContent = u.message || '';
+          btn.textContent = 'Download';
+        } else if (S === 'unsupported') {
+          line.textContent = `Cadence ${info.version}`;
+          sub.textContent = u.message || 'Updates apply to the installed app only.';
+          btn.style.display = 'none';
+        } else if (S === 'error') {
+          line.textContent = `Cadence ${info.version}`;
+          sub.textContent = u.message || 'Update check failed.';
+          btn.textContent = 'Try again';
+        } else {
+          line.textContent = `Cadence ${info.version}`;
+          sub.textContent = S === 'current'
+            ? 'You’re on the latest version.'
+            : 'Checks run automatically in the background.';
+          btn.textContent = 'Check now';
+        }
+      }
+
+      function wireUpdates() {
+        const btn = document.getElementById('upd-btn');
+        btn.onclick = () => {
+          const ready = btn.textContent === 'Restart now';
+          if (ready) C.installUpdate();
+          else C.checkUpdates();
+        };
+        C.getUpdateStatus().then(paintUpdate);
+      }
+      C.onUpdateStatus(paintUpdate);
 
       Promise.all([C.getConfig(), C.getInfo()]).then(([c, i]) => {
         cfg=c; info=i; document.getElementById('ver').textContent = `v${i.version} · Electron ${i.electron} · Chromium ${i.chrome}`;

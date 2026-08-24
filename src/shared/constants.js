@@ -5,9 +5,14 @@
 // main process, preload bridge, and renderer UIs can never drift apart.
 
 const APP_NAME = 'Cadence';
-// Version is duplicated in package.json (the build authority). Keep them in sync
-// on every release — this constant is what the UI/tray/about screen displays.
-const APP_VERSION = '1.2.0';
+// Version has ONE source: package.json, which is what electron-builder stamps
+// into the installer and what the auto-updater compares against the published
+// release. It used to be re-declared here and drifted every single time the
+// Stop hook bumped package.json alone (fixed by hand in 646c078 and 54200df,
+// then drifted again at 1.2.1) — deriving it makes that class of bug impossible.
+// electron-builder always ships package.json inside the asar, so this resolves
+// in a packaged build exactly as it does from source.
+const APP_VERSION = require('../../package.json').version;
 
 const YTM_URL = 'https://music.youtube.com/';
 const YTM_ORIGIN = 'https://music.youtube.com';
@@ -41,10 +46,37 @@ const IPC = {
   TOGGLE_LYRICS: 'app:toggleLyrics',
   APP_INFO: 'app:info',
 
+  // auto-update
+  UPDATE_STATUS: 'app:updateStatus', // main -> UI: push on every updater event
+  GET_UPDATE_STATUS: 'app:getUpdateStatus', // invoke: latest UpdateState
+  CHECK_UPDATES: 'app:checkUpdates', // UI -> main: manual check
+  INSTALL_UPDATE: 'app:installUpdate', // UI -> main: quit + install now
+
   // lyrics (main -> our UI)
   GET_LYRICS: 'app:getLyrics', // invoke: latest LyricsState
   LYRICS_PUSH: 'app:lyricsPush', // push on every lyrics state change
   LYRICS_REFETCH: 'app:lyricsRefetch', // user asked for a re-lookup / manual search
+};
+
+// Lifecycle of an update check, mirrored in the shell banner + settings UI.
+const UPDATE_STATUS = {
+  IDLE: 'idle',
+  CHECKING: 'checking',
+  CURRENT: 'current', // already on the newest version
+  AVAILABLE: 'available', // newer version exists (downloading if autoDownload)
+  DOWNLOADING: 'downloading',
+  READY: 'ready', // downloaded; installs on quit or on demand
+  ERROR: 'error',
+  UNSUPPORTED: 'unsupported', // running from source / unsigned dev build
+};
+
+const EMPTY_UPDATE = {
+  status: UPDATE_STATUS.IDLE,
+  version: '', // the version we found, when there is one
+  notes: '',
+  percent: 0,
+  checkedAt: 0,
+  message: '',
 };
 
 // Lifecycle of a lyrics lookup, mirrored in the lyrics window UI.
@@ -125,6 +157,15 @@ const DEFAULT_CONFIG = {
     lyricsAlwaysOnTop: true,
     lyricsAutoScroll: true,
   },
+  // Auto-update. Cadence checks its own GitHub releases, downloads in the
+  // background, and installs on quit — so a running app is never interrupted.
+  updates: {
+    autoCheck: true,
+    autoDownload: true,
+    installOnQuit: true,
+    checkIntervalHours: 6,
+    allowPrerelease: false,
+  },
   integrations: {
     discordRPC: false,
     discordClientId: '', // register a Discord app and set its id to enable RPC
@@ -169,5 +210,7 @@ module.exports = {
   LIKE,
   LYRICS_STATUS,
   EMPTY_LYRICS,
+  UPDATE_STATUS,
+  EMPTY_UPDATE,
   DEFAULT_CONFIG,
 };

@@ -3,7 +3,7 @@
 const { ipcMain } = require('electron');
 const { EventEmitter } = require('events');
 const config = require('./config');
-const { EMPTY_LYRICS } = require('../shared/constants');
+const { EMPTY_LYRICS, EMPTY_UPDATE } = require('../shared/constants');
 const { diag } = require('../shared/diag');
 
 // Channel literals kept in lockstep with app-preload.js / ytm-preload.js.
@@ -29,6 +29,10 @@ const CH = {
   GET_LYRICS: 'app:getLyrics',
   LYRICS_PUSH: 'app:lyricsPush',
   LYRICS_REFETCH: 'app:lyricsRefetch',
+  UPDATE_STATUS: 'app:updateStatus',
+  GET_UPDATE_STATUS: 'app:getUpdateStatus',
+  CHECK_UPDATES: 'app:checkUpdates',
+  INSTALL_UPDATE: 'app:installUpdate',
 };
 
 const EMPTY_STATE = {
@@ -65,6 +69,11 @@ class Hub extends EventEmitter {
     this._onToggleMini = () => {};
     this._onToggleLyrics = () => {};
     this._onLyricsRefetch = () => {};
+    this._update = { onCheck: () => {}, onInstall: () => false, getState: () => ({ ...EMPTY_UPDATE }) };
+  }
+
+  setUpdateHandlers(handlers) {
+    this._update = { ...this._update, ...handlers };
   }
 
   setRefs({ getYtmWebContents, supervisor, onOpenSettings, onToggleMini, onToggleLyrics }) {
@@ -123,6 +132,12 @@ class Hub extends EventEmitter {
     this.emit('lyrics', payload);
   }
 
+  // Fan out updater progress (checking / downloading / ready) to our windows.
+  pushUpdateStatus(payload) {
+    this._broadcast(CH.UPDATE_STATUS, payload);
+    this.emit('update', payload);
+  }
+
   pushSupervisorStatus(status, detail) {
     this._lastStatus = { status, detail: detail || '' };
     this._broadcast(CH.SUPERVISOR_STATUS, this._lastStatus);
@@ -156,6 +171,9 @@ class Hub extends EventEmitter {
 
     ipcMain.handle(CH.GET_STATE, () => this.latest);
     ipcMain.handle(CH.GET_LYRICS, () => this.latestLyrics);
+    ipcMain.handle(CH.GET_UPDATE_STATUS, () => this._update.getState());
+    ipcMain.on(CH.CHECK_UPDATES, () => this._update.onCheck());
+    ipcMain.on(CH.INSTALL_UPDATE, () => this._update.onInstall());
     ipcMain.on(CH.LYRICS_REFETCH, (_e, query) => this._onLyricsRefetch(query));
     ipcMain.handle(CH.GET_CONFIG, () => config.all());
     ipcMain.handle(CH.APP_INFO, () => {

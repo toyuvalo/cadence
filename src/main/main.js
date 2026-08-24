@@ -12,6 +12,7 @@ const miniPlayer = require('./windows/miniPlayer');
 const lyricsWindow = require('./windows/lyricsWindow');
 const tray = require('./tray');
 const mediaControls = require('./mediaControls');
+const updater = require('./updater');
 const lyrics = require('./integrations/lyrics');
 const notifications = require('./integrations/notifications');
 const discord = require('./integrations/discord');
@@ -87,6 +88,7 @@ function bootstrap() {
     tray.create();
     mediaControls.init(win);
     lyrics.init();
+    updater.init();
     notifications.init();
     discord.init();
     lastfm.init();

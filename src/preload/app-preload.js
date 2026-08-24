@@ -20,6 +20,10 @@ const IPC = {
   GET_LYRICS: 'app:getLyrics',
   LYRICS_PUSH: 'app:lyricsPush',
   LYRICS_REFETCH: 'app:lyricsRefetch',
+  UPDATE_STATUS: 'app:updateStatus',
+  GET_UPDATE_STATUS: 'app:getUpdateStatus',
+  CHECK_UPDATES: 'app:checkUpdates',
+  INSTALL_UPDATE: 'app:installUpdate',
 };
 
 contextBridge.exposeInMainWorld('cadence', {
@@ -28,6 +32,7 @@ contextBridge.exposeInMainWorld('cadence', {
   getConfig: () => ipcRenderer.invoke(IPC.GET_CONFIG),
   getInfo: () => ipcRenderer.invoke(IPC.APP_INFO),
   getLyrics: () => ipcRenderer.invoke(IPC.GET_LYRICS),
+  getUpdateStatus: () => ipcRenderer.invoke(IPC.GET_UPDATE_STATUS),
 
   // mutations
   setConfig: (patch) => ipcRenderer.invoke(IPC.SET_CONFIG, patch),
@@ -38,6 +43,8 @@ contextBridge.exposeInMainWorld('cadence', {
   // `query` is optional { title, artist } for a manual correction.
   refetchLyrics: (query) => ipcRenderer.send(IPC.LYRICS_REFETCH, query || null),
   retryNow: () => ipcRenderer.send(IPC.CONTROL, { action: '__retry__' }),
+  checkUpdates: () => ipcRenderer.send(IPC.CHECK_UPDATES),
+  installUpdate: () => ipcRenderer.send(IPC.INSTALL_UPDATE),
 
   // subscriptions
   onState: (cb) => {
@@ -49,6 +56,11 @@ contextBridge.exposeInMainWorld('cadence', {
     const h = (_e, l) => cb(l);
     ipcRenderer.on(IPC.LYRICS_PUSH, h);
     return () => ipcRenderer.removeListener(IPC.LYRICS_PUSH, h);
+  },
+  onUpdateStatus: (cb) => {
+    const h = (_e, u) => cb(u);
+    ipcRenderer.on(IPC.UPDATE_STATUS, h);
+    return () => ipcRenderer.removeListener(IPC.UPDATE_STATUS, h);
   },
   onConfigChanged: (cb) => {
     const h = (_e, c) => cb(c);

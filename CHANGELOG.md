@@ -2,6 +2,36 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.3.0] — 2026-08-24
+
+### Added
+- **Auto-update.** Cadence now checks its own GitHub releases in the background,
+  downloads new versions, and installs them **on quit** — never mid-song. This
+  closes the gap that made it necessary: the installed app sat at **1.0.6 from
+  2026-07-15** while the repo shipped 1.1.0 and 1.2.x, and the only symptom was a
+  feature quietly not being there. (`electron-updater` 6.8.9, `build.publish` →
+  GitHub provider; the public repo needs no token on the client side.)
+  - A staged update surfaces as a pill in the toolbar (`Cadence x.y.z ready` →
+    Restart / Later) and as a live status line in the tray menu and Settings.
+    Checking and downloading stay silent by design — only a *ready* update is
+    worth interrupting anyone for.
+  - The pill lives inside the 40 px toolbar strip because the music view is a
+    `WebContentsView` and composites **above** the host page; anything drawn
+    below y=40 would be hidden behind the player.
+  - New **Updates** settings group: auto-check, auto-download, install-on-quit,
+    and the check interval. Running from source reports "updates apply to the
+    installed app only" rather than a meaningless error.
+  - First check is delayed 25 s after launch so it never competes with loading
+    YTM, restoring the last track, and attaching the bridge.
+- `npm run release` — build and publish the installer + `latest.yml` in one step.
+
+### Fixed
+- **Version drift, structurally.** `APP_VERSION` is now derived from
+  `package.json` instead of being re-declared in `src/shared/constants.js`. The
+  two had to be hand-synced after every release and silently diverged whenever
+  the version was bumped in one place only — fixed by hand in `646c078` and
+  `54200df`, and drifted again at 1.2.1. There is now exactly one source.
+
 ## [1.2.0] — 2026-08-24
 
 ### Added
