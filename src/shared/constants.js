@@ -100,6 +100,7 @@ const EMPTY_LYRICS = {
   plain: '', // unsynced fallback text
   source: '', // e.g. 'LRCLIB'
   message: '',
+  hint: '', // secondary line: what the user can do about it
 };
 
 // Player commands understood by the ytm preload bridge.
@@ -154,8 +155,14 @@ const DEFAULT_CONFIG = {
     lyricsEnabled: true,
     lyricsOffsetMs: 0, // global nudge: +ve = lyrics appear later
     lyricsFontSize: 30, // px, active line
-    lyricsAlwaysOnTop: true,
+    // Off by default: the window is a CHILD of the main window, so it floats
+    // above Cadence but goes behind when you switch to another app. On = float
+    // above every other app too (for a second monitor / karaoke night).
+    lyricsAlwaysOnTop: false,
     lyricsAutoScroll: true,
+    // Blank = LRCLIB's public API. Point this at a self-hosted LRCLIB instance
+    // if your network filters lrclib.net (must expose /get and /search).
+    lyricsApiBase: '',
   },
   // Auto-update. Cadence checks its own GitHub releases, downloads in the
   // background, and installs on quit — so a running app is never interrupted.

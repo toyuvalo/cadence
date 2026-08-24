@@ -63,9 +63,10 @@
         { title: 'Lyrics', items: [
           ['features.lyricsEnabled', 'switch', 'Sing-along lyrics', 'Look up time-synced lyrics from LRCLIB while the lyrics window is open.'],
           ['features.lyricsAutoScroll', 'switch', 'Auto-scroll', 'Keep the current line centred. Scrolling by hand pauses this for a few seconds.'],
-          ['features.lyricsAlwaysOnTop', 'switch', 'Keep lyrics on top', 'Float the lyrics window above other apps.'],
+          ['features.lyricsAlwaysOnTop', 'switch', 'Float above all apps', 'Off: lyrics stay above Cadence but go behind when you switch apps. On: always on top of everything. Takes effect next time the lyrics window opens.'],
           ['features.lyricsOffsetMs', 'range', 'Timing offset', 'Nudge the lyrics if they run ahead of or behind the vocals.', { min:-5000, max:5000, step:250, suffix:'ms' }],
           ['features.lyricsFontSize', 'range', 'Lyrics text size', 'Size of the active line.', { min:14, max:64, step:2, suffix:'px' }],
+          ['features.lyricsApiBase', 'text', 'Lyrics server', 'Blank = lrclib.net. Point at a self-hosted LRCLIB if your network blocks it.', { placeholder:'https://lrclib.net/api' }],
         ]},
         { title: 'Appearance', items: [
           ['appearance.zoom', 'range', 'Zoom', 'Interface zoom level (50–200%).', { min:50, max:200, step:5, suffix:'%' }],
@@ -107,6 +108,10 @@
           r.addEventListener('input', e => { o.textContent=e.target.value+(opts.suffix||''); });
           r.addEventListener('change', e => save(path, parseInt(e.target.value,10)));
           ctrl.appendChild(r); ctrl.appendChild(o);
+        } else if (type==='text') {
+          ctrl = document.createElement('input'); ctrl.type='text'; ctrl.value=val||'';
+          ctrl.placeholder=(opts&&opts.placeholder)||''; ctrl.style.minWidth='210px';
+          ctrl.addEventListener('change', e => save(path, e.target.value.trim()));
         } else if (type==='select') {
           ctrl = document.createElement('select');
           opts.options.forEach(op => { const e=document.createElement('option'); e.value=op; e.textContent=op; if(op===val)e.selected=true; ctrl.appendChild(e); });

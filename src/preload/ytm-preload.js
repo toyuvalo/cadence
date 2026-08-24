@@ -25,6 +25,7 @@ const IPC = {
   READY: 'ytm:ready',
   LOG: 'ytm:log',
   COMMAND: 'ytm:command',
+  TOGGLE_LYRICS: 'app:toggleLyrics', // handled by hub.js, same as our own windows
 };
 
 const LIKE = { LIKE: 'LIKE', DISLIKE: 'DISLIKE', INDIFFERENT: 'INDIFFERENT' };
@@ -196,6 +197,86 @@ function injectAdCss() {
   (document.head || document.documentElement).appendChild(style);
 }
 
+// ---- lyrics button --------------------------------------------------------
+// This button has to be injected INTO the YouTube Music page rather than drawn
+// in our own shell: the music view is a WebContentsView, which composites ABOVE
+// the host page, so anything we render there below the toolbar strip is hidden
+// behind the player. Injecting puts it in the only layer that is actually on
+// top at the bottom-right of the window.
+
+const LYRICS_BTN_ID = 'cadence-lyrics-btn';
+let btnErrorLogged = false;
+
+const LYRICS_BTN_CSS = `
+  #${LYRICS_BTN_ID} {
+    position: fixed; right: 20px; z-index: 2147483000;
+    display: flex; align-items: center; gap: 7px;
+    height: 38px; padding: 0 15px 0 13px; border: 0; border-radius: 999px;
+    background: linear-gradient(135deg, #ff2d55, #7a1fff); color: #fff;
+    font-family: "Segoe UI", system-ui, sans-serif; font-size: 12.5px; font-weight: 600;
+    letter-spacing: .01em; cursor: pointer; box-shadow: 0 6px 22px rgba(0,0,0,.45);
+    opacity: .92; transition: transform .15s ease, opacity .15s ease, box-shadow .15s ease;
+  }
+  #${LYRICS_BTN_ID}:hover { opacity: 1; transform: translateY(-1px); box-shadow: 0 10px 28px rgba(255,45,85,.35); }
+  #${LYRICS_BTN_ID}:active { transform: translateY(0); }
+  #${LYRICS_BTN_ID} svg { width: 17px; height: 17px; fill: currentColor; }
+`;
+
+// The player bar is fixed to the bottom of the viewport and changes height
+// between normal and expanded/mini layouts, so measure it rather than guessing
+// and leaving the button floating over YTM's own controls.
+function playerBarHeight() {
+  const bar = pick(['ytmusic-player-bar', '.ytmusic-player-bar']);
+  const h = bar ? bar.getBoundingClientRect().height : 0;
+  return h > 20 ? Math.round(h) : 72;
+}
+
+function ensureLyricsButton() {
+  if (document.getElementById(LYRICS_BTN_ID)) {
+    // Keep it clear of the player bar even when YTM changes its layout.
+    document.getElementById(LYRICS_BTN_ID).style.bottom = playerBarHeight() + 18 + 'px';
+    return;
+  }
+  if (!document.body) return;
+
+  if (!document.getElementById('cadence-lyrics-btn-css')) {
+    const style = document.createElement('style');
+    style.id = 'cadence-lyrics-btn-css';
+    style.textContent = LYRICS_BTN_CSS;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  const btn = document.createElement('button');
+  btn.id = LYRICS_BTN_ID;
+  btn.title = 'Sing along — time-synced lyrics';
+  btn.style.bottom = playerBarHeight() + 18 + 'px';
+
+  // Built with DOM APIs rather than innerHTML on purpose: YouTube Music enforces
+  // Trusted Types (`require-trusted-types-for 'script'`), under which any
+  // innerHTML assignment throws — which silently cost us the whole button.
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', 'M12 3v10.6a3.5 3.5 0 1 0 2 3.15V7h5V3h-7z');
+  svg.appendChild(path);
+  const label = document.createElement('span');
+  label.textContent = 'Lyrics';
+  btn.appendChild(svg);
+  btn.appendChild(label);
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      ipcRenderer.send(IPC.TOGGLE_LYRICS);
+    } catch (err) {
+      log('lyrics toggle failed: ' + err.message);
+    }
+  });
+  document.body.appendChild(btn);
+  log('lyrics button injected');
+}
+
 // ---- commands -------------------------------------------------------------
 
 function handleCommand(_e, payload) {
@@ -302,6 +383,19 @@ function boot() {
   // act as the "bridge alive" ping the supervisor's watchdog looks for.
   setInterval(() => {
     attachVideoEvents();
+    // YTM is a SPA that re-renders whole regions on navigation, so the button
+    // is re-asserted on the same heartbeat that re-finds the <video>.
+    try {
+      ensureLyricsButton();
+    } catch (err) {
+      // Never let our chrome throw into YTM — but never swallow it silently
+      // either: a swallowed Trusted-Types error is exactly how the button went
+      // missing with no trace. Reported once so the log stays readable.
+      if (!btnErrorLogged) {
+        btnErrorLogged = true;
+        log('lyrics button failed: ' + err.message);
+      }
+    }
     pushState();
   }, 1000);
 

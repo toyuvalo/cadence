@@ -107,9 +107,6 @@
         <button id="update-now">Restart</button>
         <button id="update-later" class="later">Later</button>
       </div>
-      <button id="nav-lyrics" title="Lyrics — sing along" aria-label="Lyrics">
-        <svg viewBox="0 0 24 24"><path d="M12 3v10.6a3.5 3.5 0 1 0 2 3.15V7h5V3h-7z"/><path d="M3 6h6v1.6H3zM3 10h6v1.6H3zM3 14h4.5v1.6H3z" opacity=".6"/></svg>
-      </button>
     </div>
     <div id="overlay">
       <div class="logo">
@@ -155,7 +152,9 @@
 
       document.getElementById('nav-back').addEventListener('click', () => window.cadence && window.cadence.control('back'));
       document.getElementById('nav-fwd').addEventListener('click', () => window.cadence && window.cadence.control('forward'));
-      document.getElementById('nav-lyrics').addEventListener('click', () => window.cadence && window.cadence.toggleLyrics());
+      // The Lyrics button lives at the bottom-right, injected into the music
+      // view by ytm-preload.js — a WebContentsView composites above this page,
+      // so a button drawn here would be hidden behind the player.
 
       // --- update banner ---------------------------------------------------
       // Deliberately only shown for a STAGED update: "checking"/"downloading"

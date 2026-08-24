@@ -2,6 +2,35 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.3.3] — 2026-08-24
+
+### Changed
+- **The Lyrics button moved to the bottom-right of the player**, where you'd
+  expect it, and it is now **injected into the YouTube Music page** by
+  `ytm-preload.js` rather than drawn in our own toolbar. It has to be: the music
+  view is a `WebContentsView`, which composites *above* the host page, so the
+  bottom-right of our shell is behind the player and can't be clicked. The button
+  measures the player bar and sits clear of it, and is re-asserted on the same
+  1 s heartbeat that re-finds the `<video>` (YTM is a SPA and re-renders regions
+  on navigation).
+
+### Fixed
+- **The lyrics window no longer floats over every other application.** It was
+  created with `alwaysOnTop` at the `screen-saver` level, so it sat above
+  unrelated apps. It is now a **child window of the main window**: above Cadence,
+  behind whatever you switch to. Floating over everything is still available, but
+  it is now opt-in via Settings → Lyrics → **Float above all apps** (default off).
+- **"Could not reach the lyrics service" now says what is actually wrong.**
+  Transport failures are classified: DNS failure, offline, timeout, and — the
+  case that prompted this — **network-level filtering**. An ISP/router "safe
+  browsing" filter blocking `lrclib.net` injects an HTTP redirect to a warning
+  page, but on HTTPS it can only tear down the TLS handshake, which surfaces as
+  `ERR_SSL_*` / `SEC_E_INVALID_TOKEN` and looks nothing like "blocked". The UI now
+  names it and tells you to allowlist the domain on your gateway. A filtered
+  domain also no longer triggers the retry loop — it fails identically every time.
+- **Settings → Lyrics → Lyrics server** lets you point at a self-hosted LRCLIB
+  instance when the public one is unreachable.
+
 ## [1.3.0] — 2026-08-24
 
 ### Added

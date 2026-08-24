@@ -92,6 +92,7 @@
       <div id="status">
         <div class="spinner" id="spin"></div>
         <div class="msg" id="statusMsg">Looking for lyrics…</div>
+        <div class="msg" id="statusHint" style="font-size:11.5px;opacity:.75;max-width:34ch"></div>
         <button id="statusBtn" style="display:none">Try again</button>
       </div>
 
@@ -216,8 +217,8 @@
           (lyrics && lyrics.instrumental) ? '♪  Instrumental — no lyrics to sing' :
           (lyrics && lyrics.message) ? lyrics.message :
           (state && state.hasSong) ? 'No lyrics for this track yet.' : 'Play something to see its lyrics.';
-        $('statusMsg').innerHTML = '';
         $('statusMsg').textContent = msg;
+        $('statusHint').textContent = (lyrics && lyrics.hint) || '';
       }
 
       function paintHeader() {
