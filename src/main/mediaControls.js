@@ -45,6 +45,17 @@ function registerShortcuts() {
       console.error(`[mediaControls] could not register ${accel}:`, err.message);
     }
   }
+  // Window toggles aren't player commands — route them through the hub's refs.
+  if (s.miniPlayer) {
+    try {
+      globalShortcut.register(s.miniPlayer, () => hub._onToggleMini());
+    } catch {}
+  }
+  if (s.lyrics) {
+    try {
+      globalShortcut.register(s.lyrics, () => hub._onToggleLyrics());
+    } catch {}
+  }
   // Volume up/down support a repeat-friendly delta.
   if (s.volumeUp) {
     try {

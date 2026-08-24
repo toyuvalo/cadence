@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src https: data:;" />
+    <title>Cadence — Lyrics</title>
+    <style>
+      * { box-sizing:border-box; }
+      html, body { margin:0; height:100%; background:transparent; overflow:hidden;
+        font-family:"Segoe UI",system-ui,sans-serif; -webkit-user-select:none; user-select:none; }
+      #card {
+        position:absolute; inset:6px; border-radius:18px; overflow:hidden;
+        background:rgba(14,14,17,.93); backdrop-filter:blur(20px);
+        border:1px solid rgba(255,255,255,.07); box-shadow:0 18px 60px rgba(0,0,0,.55);
+        display:flex; flex-direction:column; color:#f1f1f3;
+      }
+      /* subtle album-tinted glow behind the words */
+      #glow { position:absolute; inset:-40% -20% auto -20%; height:70%; filter:blur(70px);
+        opacity:.28; background:radial-gradient(60% 100% at 50% 0%, #ff2d55, transparent 70%); pointer-events:none; }
+
+      header { -webkit-app-region:drag; display:flex; align-items:center; gap:10px;
+        padding:10px 12px 8px; position:relative; z-index:2; }
+      #head-meta { min-width:0; flex:1; }
+      #head-title { font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      #head-artist { font-size:11px; color:#8b8f98; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+      .hbtn { -webkit-app-region:no-drag; background:none; border:0; color:#7d818b; cursor:pointer;
+        border-radius:7px; padding:4px; display:flex; line-height:0; }
+      .hbtn:hover { color:#fff; background:rgba(255,255,255,.09); }
+      .hbtn svg { width:16px; height:16px; fill:currentColor; }
+
+      #scroller { flex:1; position:relative; overflow:hidden; z-index:1;
+        -webkit-mask-image:linear-gradient(180deg, transparent 0, #000 14%, #000 82%, transparent 100%); }
+      #lines { position:absolute; left:0; right:0; top:0; padding:0 22px;
+        transition:transform .45s cubic-bezier(.22,.61,.36,1); will-change:transform; }
+      .line {
+        font-size:var(--fs,30px); line-height:1.32; font-weight:650; letter-spacing:-.01em;
+        color:rgba(255,255,255,.26); padding:7px 0; cursor:pointer;
+        transition:color .25s ease, opacity .25s ease, transform .25s ease; transform-origin:left center;
+      }
+      .line:hover { color:rgba(255,255,255,.5); }
+      .line.past { color:rgba(255,255,255,.2); }
+      .line.active { color:#fff; text-shadow:0 2px 22px rgba(255,45,85,.35); }
+      .line.next { color:rgba(255,255,255,.42); }
+      .line.blank { padding:3px 0; }
+      .line.blank::after { content:"♪"; color:rgba(255,255,255,.18); font-size:.6em; }
+      body.unsynced .line { cursor:default; font-size:calc(var(--fs,30px) * .62); font-weight:500;
+        color:rgba(255,255,255,.78); padding:3px 0; }
+      body.unsynced #scroller { overflow-y:auto; }
+      body.unsynced #lines { position:relative; transition:none; transform:none !important; }
+
+      #status { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+        justify-content:center; gap:12px; text-align:center; padding:0 28px; z-index:3; }
+      #status.hidden { display:none; }
+      #status .msg { color:#8b8f98; font-size:13px; line-height:1.55; }
+      #status .big { font-size:15px; font-weight:600; color:#e9e9ee; }
+      #status button { background:#ff2d55; color:#fff; border:0; border-radius:999px;
+        padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
+      #status button:hover { filter:brightness(1.08); }
+      .spinner { width:22px; height:22px; border:3px solid rgba(255,255,255,.14);
+        border-top-color:#ff2d55; border-radius:50%; animation:spin .8s linear infinite; }
+      @keyframes spin { to { transform:rotate(360deg); } }
+
+      footer { display:flex; align-items:center; justify-content:space-between; gap:8px;
+        padding:7px 12px 9px; border-top:1px solid rgba(255,255,255,.06); z-index:2;
+        font-size:11px; color:#7d818b; -webkit-app-region:drag; }
+      footer .grp { display:flex; align-items:center; gap:4px; -webkit-app-region:no-drag; }
+      footer button { background:none; border:0; color:#8b8f98; cursor:pointer; border-radius:6px;
+        padding:3px 7px; font-size:11px; font-family:inherit; }
+      footer button:hover { color:#fff; background:rgba(255,255,255,.09); }
+      #offset { min-width:46px; text-align:center; font-variant-numeric:tabular-nums; }
+      #src { opacity:.75; }
+    </style>
+  </head>
+  <body>
+    <div id="card">
+      <div id="glow"></div>
+      <header>
+        <div id="head-meta">
+          <div id="head-title">Nothing playing</div>
+          <div id="head-artist">—</div>
+        </div>
+        <button class="hbtn" id="refetch" title="Look up again">
+          <svg viewBox="0 0 24 24"><path d="M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>
+        </button>
+        <button class="hbtn" id="close" title="Close lyrics">
+          <svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
+        </button>
+      </header>
+
+      <div id="scroller"><div id="lines"></div></div>
+
+      <div id="status">
+        <div class="spinner" id="spin"></div>
+        <div class="msg" id="statusMsg">Looking for lyrics…</div>
+        <button id="statusBtn" style="display:none">Try again</button>
+      </div>
+
+      <footer>
+        <div class="grp">
+          <button id="minus" title="Lyrics earlier (Shift+←)">−</button>
+          <span id="offset">0.0s</span>
+          <button id="plus" title="Lyrics later (Shift+→)">+</button>
+        </div>
+        <div class="grp">
+          <button id="smaller" title="Smaller text">A−</button>
+          <button id="bigger" title="Bigger text">A+</button>
+        </div>
+        <span id="src">LRCLIB</span>
+      </footer>
+    </div>
+
+    <script>
+      const C = window.cadence;
+      const $ = (id) => document.getElementById(id);
+
+      let state = null;      // latest PlayerState
+      let lyrics = null;     // latest LyricsState
+      let cfg = null;
+      let rendered = '';     // signature of what's in the DOM, to avoid rebuilds
+      let nodes = [];        // .line elements, index-aligned with lyrics.lines
+      let activeIdx = -1;
+      let userScrolledAt = 0;
+
+      // ---- clock ----------------------------------------------------------
+      // The player pushes state ~1×/s, which is far too coarse for karaoke, so
+      // we extrapolate from the last snapshot's timestamp every animation frame.
+      // Same process clock on both sides, so `ts` is directly comparable.
+      function playhead() {
+        if (!state || !state.hasSong) return 0;
+        const base = state.currentTime || 0;
+        if (state.isPaused) return base;
+        const drift = (Date.now() - (state.ts || Date.now())) / 1000;
+        const t = base + Math.max(0, drift);
+        return state.duration ? Math.min(t, state.duration) : t;
+      }
+
+      function offsetSec() {
+        return ((cfg && cfg.features && cfg.features.lyricsOffsetMs) || 0) / 1000;
+      }
+
+      // ---- rendering ------------------------------------------------------
+      function sig(l) {
+        if (!l) return 'none';
+        return [l.status, l.videoId, l.title, l.artist, l.synced, l.lines.length].join('|');
+      }
+
+      function build() {
+        const box = $('lines');
+        box.innerHTML = '';
+        nodes = [];
+        activeIdx = -1;
+        const synced = !!(lyrics && lyrics.synced);
+        document.body.classList.toggle('unsynced', !!lyrics && !synced);
+        if (!lyrics || !lyrics.lines.length) return;
+
+        for (let i = 0; i < lyrics.lines.length; i++) {
+          const line = lyrics.lines[i];
+          const el = document.createElement('div');
+          el.className = 'line' + (line.text ? '' : ' blank');
+          el.textContent = line.text;   // API text only — never interpreted as HTML
+          if (synced) {
+            el.title = 'Jump to this line';
+            el.addEventListener('click', () => C.control('seek', Math.max(0, line.time + offsetSec())));
+          }
+          box.appendChild(el);
+          nodes.push(el);
+        }
+      }
+
+      function indexAt(t) {
+        const lines = lyrics.lines;
+        let lo = 0, hi = lines.length - 1, found = -1;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          if (lines[mid].time <= t) { found = mid; lo = mid + 1; } else { hi = mid - 1; }
+        }
+        return found;
+      }
+
+      function centerOn(idx) {
+        if (!cfg || !cfg.features || cfg.features.lyricsAutoScroll === false) return;
+        if (Date.now() - userScrolledAt < 4000) return; // let a manual scroll settle
+        const el = nodes[idx];
+        if (!el) return;
+        const view = $('scroller').clientHeight;
+        const y = el.offsetTop + el.offsetHeight / 2 - view / 2;
+        $('lines').style.transform = `translateY(${-Math.max(0, y)}px)`;
+      }
+
+      function tick() {
+        requestAnimationFrame(tick);
+        if (!lyrics || !lyrics.synced || !nodes.length) return;
+        const idx = indexAt(playhead() - offsetSec());
+        if (idx === activeIdx) return;
+        if (nodes[activeIdx]) nodes[activeIdx].classList.remove('active');
+        if (nodes[activeIdx + 1]) nodes[activeIdx + 1].classList.remove('next');
+        activeIdx = idx;
+        for (let i = 0; i < nodes.length; i++) nodes[i].classList.toggle('past', i < idx);
+        if (nodes[idx]) nodes[idx].classList.add('active');
+        if (nodes[idx + 1]) nodes[idx + 1].classList.add('next');
+        centerOn(Math.max(0, idx));
+      }
+
+      function paintStatus() {
+        const el = $('status');
+        const st = lyrics ? lyrics.status : 'idle';
+        const hasLines = !!(lyrics && lyrics.lines.length) && !(lyrics && lyrics.instrumental);
+        if (st === 'ok' && hasLines) { el.classList.add('hidden'); return; }
+        el.classList.remove('hidden');
+        const spin = st === 'loading';
+        $('spin').style.display = spin ? 'block' : 'none';
+        $('statusBtn').style.display = (st === 'notfound' || st === 'error') ? 'inline-block' : 'none';
+        $('statusBtn').textContent = st === 'error' ? 'Retry' : 'Search again';
+        const msg =
+          st === 'loading' ? 'Looking for lyrics…' :
+          (lyrics && lyrics.instrumental) ? '♪  Instrumental — no lyrics to sing' :
+          (lyrics && lyrics.message) ? lyrics.message :
+          (state && state.hasSong) ? 'No lyrics for this track yet.' : 'Play something to see its lyrics.';
+        $('statusMsg').innerHTML = '';
+        $('statusMsg').textContent = msg;
+      }
+
+      function paintHeader() {
+        const s = state || {};
+        $('head-title').textContent = s.hasSong ? (s.title || 'Unknown') : 'Nothing playing';
+        $('head-artist').textContent = s.hasSong ? (s.artist || '') : '—';
+      }
+
+      function applyCfg() {
+        const f = (cfg && cfg.features) || {};
+        document.documentElement.style.setProperty('--fs', (f.lyricsFontSize || 30) + 'px');
+        const ms = f.lyricsOffsetMs || 0;
+        $('offset').textContent = (ms > 0 ? '+' : '') + (ms / 1000).toFixed(1) + 's';
+      }
+
+      // ---- wiring ---------------------------------------------------------
+      C.onState((s) => { state = s; paintHeader(); if (!lyrics || !lyrics.lines.length) paintStatus(); });
+      C.onLyrics((l) => {
+        lyrics = l;
+        const s = sig(l);
+        if (s !== rendered) { rendered = s; build(); }
+        paintStatus();
+      });
+      C.onConfigChanged((c) => { cfg = c; applyCfg(); });
+
+      $('close').onclick = () => C.toggleLyrics();
+      $('refetch').onclick = () => C.refetchLyrics();
+      $('statusBtn').onclick = () => C.refetchLyrics();
+
+      function nudge(ms) {
+        const cur = (cfg.features.lyricsOffsetMs || 0) + ms;
+        cfg.features.lyricsOffsetMs = cur;
+        applyCfg();
+        C.setConfig({ features: { lyricsOffsetMs: cur } });
+      }
+      function resize(px) {
+        const cur = Math.max(14, Math.min(64, (cfg.features.lyricsFontSize || 30) + px));
+        cfg.features.lyricsFontSize = cur;
+        applyCfg();
+        centerOn(Math.max(0, activeIdx));
+        C.setConfig({ features: { lyricsFontSize: cur } });
+      }
+      $('minus').onclick = () => nudge(-250);
+      $('plus').onclick = () => nudge(250);
+      $('smaller').onclick = () => resize(-2);
+      $('bigger').onclick = () => resize(2);
+
+      // Manual wheel scroll temporarily suspends auto-centering.
+      $('scroller').addEventListener('wheel', (e) => {
+        if (!lyrics || !lyrics.synced) return; // unsynced view scrolls natively
+        userScrolledAt = Date.now();
+        const cur = parseFloat(($('lines').style.transform.match(/-?[\d.]+/) || [0])[0]) || 0;
+        $('lines').style.transform = `translateY(${Math.min(0, cur - e.deltaY)}px)`;
+      }, { passive: true });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') C.toggleLyrics();
+        else if (e.shiftKey && e.key === 'ArrowLeft') nudge(-250);
+        else if (e.shiftKey && e.key === 'ArrowRight') nudge(250);
+        else if (e.key === ' ') { e.preventDefault(); C.control('playPause'); }
+      });
+
+      Promise.all([C.getState(), C.getConfig(), C.getLyrics()]).then(([s, c, l]) => {
+        state = s; cfg = c; lyrics = l;
+        applyCfg(); paintHeader(); rendered = sig(l); build(); paintStatus();
+      });
+      requestAnimationFrame(tick);
+    </script>
+  </body>
+</html>

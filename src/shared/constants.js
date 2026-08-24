@@ -7,7 +7,7 @@
 const APP_NAME = 'Cadence';
 // Version is duplicated in package.json (the build authority). Keep them in sync
 // on every release — this constant is what the UI/tray/about screen displays.
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 
 const YTM_URL = 'https://music.youtube.com/';
 const YTM_ORIGIN = 'https://music.youtube.com';
@@ -38,7 +38,36 @@ const IPC = {
   CONTROL: 'app:control', // UI buttons -> a player command
   OPEN_SETTINGS: 'app:openSettings',
   TOGGLE_MINI: 'app:toggleMini',
+  TOGGLE_LYRICS: 'app:toggleLyrics',
   APP_INFO: 'app:info',
+
+  // lyrics (main -> our UI)
+  GET_LYRICS: 'app:getLyrics', // invoke: latest LyricsState
+  LYRICS_PUSH: 'app:lyricsPush', // push on every lyrics state change
+  LYRICS_REFETCH: 'app:lyricsRefetch', // user asked for a re-lookup / manual search
+};
+
+// Lifecycle of a lyrics lookup, mirrored in the lyrics window UI.
+const LYRICS_STATUS = {
+  IDLE: 'idle', // nothing playing / feature off
+  LOADING: 'loading',
+  OK: 'ok', // lines (synced) or plain text available
+  NOT_FOUND: 'notfound',
+  ERROR: 'error', // network/API failure — retried automatically
+};
+
+// Empty LyricsState — the shape every consumer can rely on.
+const EMPTY_LYRICS = {
+  status: LYRICS_STATUS.IDLE,
+  videoId: '',
+  title: '',
+  artist: '',
+  synced: false, // true => `lines` carry real timestamps
+  instrumental: false,
+  lines: [], // [{ time: seconds, text: string }]
+  plain: '', // unsynced fallback text
+  source: '', // e.g. 'LRCLIB'
+  message: '',
 };
 
 // Player commands understood by the ytm preload bridge.
@@ -86,6 +115,15 @@ const DEFAULT_CONFIG = {
     skipDisabledAds: true, // auto-skip/mute video ads
     hideAds: true, // CSS-hide promo surfaces
     sleepTimerEnabled: false,
+    // --- sing-along lyrics ---------------------------------------------------
+    // Time-synced lyrics are looked up from LRCLIB (open, no account, no key)
+    // only while the lyrics window is open, so the feature costs nothing when
+    // unused. Nothing is fetched from YouTube itself.
+    lyricsEnabled: true,
+    lyricsOffsetMs: 0, // global nudge: +ve = lyrics appear later
+    lyricsFontSize: 30, // px, active line
+    lyricsAlwaysOnTop: true,
+    lyricsAutoScroll: true,
   },
   integrations: {
     discordRPC: false,
@@ -102,6 +140,7 @@ const DEFAULT_CONFIG = {
     volumeDown: '',
     like: '',
     miniPlayer: '',
+    lyrics: '',
   },
   lastfm: {
     // The app's public Last.fm API identity lives in code, not here. This holds
@@ -115,6 +154,7 @@ const DEFAULT_CONFIG = {
     maximized: false,
     lastUrl: '',
     volume: 60,
+    lyricsBounds: { width: 420, height: 560, x: undefined, y: undefined },
   },
 };
 
@@ -127,5 +167,7 @@ module.exports = {
   IPC,
   ACTIONS,
   LIKE,
+  LYRICS_STATUS,
+  EMPTY_LYRICS,
   DEFAULT_CONFIG,
 };

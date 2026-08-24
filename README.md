@@ -36,6 +36,7 @@ Diagnosed from a real YTMDesktop `main.log`, three unrecovered failures:
 - System tray with now-playing and transport controls
 - Global media keys + Windows taskbar thumbnail toolbar buttons
 - Compact, always-on-top mini-player (seek, like, transport)
+- Time-synced sing-along lyrics (LRCLIB) with click-to-seek and a timing nudge
 - Track-change desktop notifications with album art
 - Discord Rich Presence (opt-in)
 - Last.fm scrobbling (opt-in; credentials via environment variables, never on disk)

@@ -37,6 +37,7 @@ function buildMenu(state) {
     { label: 'Like', click: () => hub.sendCommand('like') },
     { type: 'separator' },
     { label: 'Mini Player', click: () => hub._onToggleMini() },
+    { label: 'Lyrics', click: () => hub._onToggleLyrics() },
     { label: 'Settings…', click: () => hub._onOpenSettings() },
     { type: 'separator' },
     {

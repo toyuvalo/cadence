@@ -60,6 +60,13 @@
           ['features.skipDisabledAds', 'switch', 'Auto-skip ads', 'Skip / fast-forward video ads automatically.'],
           ['features.hideAds', 'switch', 'Hide promos', 'CSS-hide upsell banners and promo cards.'],
         ]},
+        { title: 'Lyrics', items: [
+          ['features.lyricsEnabled', 'switch', 'Sing-along lyrics', 'Look up time-synced lyrics from LRCLIB while the lyrics window is open.'],
+          ['features.lyricsAutoScroll', 'switch', 'Auto-scroll', 'Keep the current line centred. Scrolling by hand pauses this for a few seconds.'],
+          ['features.lyricsAlwaysOnTop', 'switch', 'Keep lyrics on top', 'Float the lyrics window above other apps.'],
+          ['features.lyricsOffsetMs', 'range', 'Timing offset', 'Nudge the lyrics if they run ahead of or behind the vocals.', { min:-5000, max:5000, step:250, suffix:'ms' }],
+          ['features.lyricsFontSize', 'range', 'Lyrics text size', 'Size of the active line.', { min:14, max:64, step:2, suffix:'px' }],
+        ]},
         { title: 'Appearance', items: [
           ['appearance.zoom', 'range', 'Zoom', 'Interface zoom level (50–200%).', { min:50, max:200, step:5, suffix:'%' }],
           ['appearance.theme', 'select', 'Theme (app chrome)', 'Affects Cadence windows, not YouTube Music itself.', { options:['system','dark','light'] }],

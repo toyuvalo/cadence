@@ -9,8 +9,10 @@ const Supervisor = require('./supervisor');
 const mainWindow = require('./windows/mainWindow');
 const settingsWindow = require('./windows/settingsWindow');
 const miniPlayer = require('./windows/miniPlayer');
+const lyricsWindow = require('./windows/lyricsWindow');
 const tray = require('./tray');
 const mediaControls = require('./mediaControls');
+const lyrics = require('./integrations/lyrics');
 const notifications = require('./integrations/notifications');
 const discord = require('./integrations/discord');
 const lastfm = require('./integrations/lastfm');
@@ -76,6 +78,7 @@ function bootstrap() {
       supervisor,
       onOpenSettings: () => settingsWindow.open(),
       onToggleMini: () => miniPlayer.toggle(),
+      onToggleLyrics: () => lyricsWindow.toggle(),
     });
 
     // Register our own host window + integrations as state consumers.
@@ -83,6 +86,7 @@ function bootstrap() {
 
     tray.create();
     mediaControls.init(win);
+    lyrics.init();
     notifications.init();
     discord.init();
     lastfm.init();
@@ -107,6 +111,7 @@ function bootstrap() {
     config.on('change', (cfg) => {
       mainWindow.applyZoom(cfg.appearance.zoom);
       nativeTheme.themeSource = cfg.appearance.theme || 'system';
+      lyricsWindow.applyConfig(cfg);
     });
 
     // --- close / minimize behaviour -----------------------------------------

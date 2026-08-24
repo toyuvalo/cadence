@@ -2,6 +2,38 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.2.0] — 2026-08-24
+
+### Added
+- **Sing-along lyrics.** A new always-on-top lyrics window shows time-synced
+  lyrics for the current track and highlights the line being sung, karaoke-style.
+  - **Source: [LRCLIB](https://lrclib.net)** — open database, no account, no API
+    key, no credentials to store. YouTube Music's own lyrics tab is deliberately
+    *not* scraped: its markup is unstable and it carries no timing data.
+  - **Matching** escalates through four attempts — exact match on
+    title + artist + album + duration, then without the album, then on cleaned
+    strings (release clutter like `(Official Video)` and the `- Topic` channel
+    suffix stripped), then a fuzzy search. Search hits are ranked by duration
+    proximity so a cover or live cut can't be mistaken for the studio version.
+  - **Timing is interpolated per animation frame** from the last player snapshot
+    (`currentTime` + elapsed wall-clock since its `ts`). The bridge only pushes
+    state ~1×/s, which is far too coarse for karaoke; extrapolating gives smooth
+    line-to-line highlighting without increasing the push rate.
+  - Click any line to seek to it. `Shift+←` / `Shift+→` nudge the timing offset
+    ±250 ms (persisted), `A−` / `A+` size the text, `Space` toggles playback,
+    `Esc` closes. Hand-scrolling suspends auto-centring for 4 s.
+  - Tracks with lyrics but no timings render as a plain scrollable sheet;
+    instrumentals say so instead of showing an empty pane.
+  - Opened from the toolbar's lyrics button, the tray menu, or an optional global
+    shortcut (`shortcuts.lyrics`).
+  - **Lookups only run while the lyrics window is open**, and every result —
+    including misses — is cached per video id, so the feature costs no network
+    traffic when unused and none on replay.
+- Settings gained a **Lyrics** group: enable/disable, auto-scroll, always-on-top,
+  timing offset, and text size.
+- The `shortcuts.miniPlayer` accelerator is now actually registered (it was in
+  the config schema but never bound).
+
 ## [1.1.0] — 2026-08-21
 
 ### Security

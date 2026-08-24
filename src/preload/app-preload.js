@@ -13,9 +13,13 @@ const IPC = {
   CONTROL: 'app:control',
   OPEN_SETTINGS: 'app:openSettings',
   TOGGLE_MINI: 'app:toggleMini',
+  TOGGLE_LYRICS: 'app:toggleLyrics',
   APP_INFO: 'app:info',
   SUPERVISOR_STATUS: 'app:supervisorStatus',
   STATE_PUSH: 'app:statePush',
+  GET_LYRICS: 'app:getLyrics',
+  LYRICS_PUSH: 'app:lyricsPush',
+  LYRICS_REFETCH: 'app:lyricsRefetch',
 };
 
 contextBridge.exposeInMainWorld('cadence', {
@@ -23,12 +27,16 @@ contextBridge.exposeInMainWorld('cadence', {
   getState: () => ipcRenderer.invoke(IPC.GET_STATE),
   getConfig: () => ipcRenderer.invoke(IPC.GET_CONFIG),
   getInfo: () => ipcRenderer.invoke(IPC.APP_INFO),
+  getLyrics: () => ipcRenderer.invoke(IPC.GET_LYRICS),
 
   // mutations
   setConfig: (patch) => ipcRenderer.invoke(IPC.SET_CONFIG, patch),
   control: (action, value) => ipcRenderer.send(IPC.CONTROL, { action, value }),
   openSettings: () => ipcRenderer.send(IPC.OPEN_SETTINGS),
   toggleMini: () => ipcRenderer.send(IPC.TOGGLE_MINI),
+  toggleLyrics: () => ipcRenderer.send(IPC.TOGGLE_LYRICS),
+  // `query` is optional { title, artist } for a manual correction.
+  refetchLyrics: (query) => ipcRenderer.send(IPC.LYRICS_REFETCH, query || null),
   retryNow: () => ipcRenderer.send(IPC.CONTROL, { action: '__retry__' }),
 
   // subscriptions
@@ -36,6 +44,11 @@ contextBridge.exposeInMainWorld('cadence', {
     const h = (_e, s) => cb(s);
     ipcRenderer.on(IPC.STATE_PUSH, h);
     return () => ipcRenderer.removeListener(IPC.STATE_PUSH, h);
+  },
+  onLyrics: (cb) => {
+    const h = (_e, l) => cb(l);
+    ipcRenderer.on(IPC.LYRICS_PUSH, h);
+    return () => ipcRenderer.removeListener(IPC.LYRICS_PUSH, h);
   },
   onConfigChanged: (cb) => {
     const h = (_e, c) => cb(c);

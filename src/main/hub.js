@@ -3,6 +3,7 @@
 const { ipcMain } = require('electron');
 const { EventEmitter } = require('events');
 const config = require('./config');
+const { EMPTY_LYRICS } = require('../shared/constants');
 const { diag } = require('../shared/diag');
 
 // Channel literals kept in lockstep with app-preload.js / ytm-preload.js.
@@ -21,9 +22,13 @@ const CH = {
   CONTROL: 'app:control',
   OPEN_SETTINGS: 'app:openSettings',
   TOGGLE_MINI: 'app:toggleMini',
+  TOGGLE_LYRICS: 'app:toggleLyrics',
   APP_INFO: 'app:info',
   SUPERVISOR_STATUS: 'app:supervisorStatus',
   STATE_PUSH: 'app:statePush',
+  GET_LYRICS: 'app:getLyrics',
+  LYRICS_PUSH: 'app:lyricsPush',
+  LYRICS_REFETCH: 'app:lyricsRefetch',
 };
 
 const EMPTY_STATE = {
@@ -51,19 +56,23 @@ class Hub extends EventEmitter {
     super();
     this.setMaxListeners(40);
     this.latest = { ...EMPTY_STATE };
+    this.latestLyrics = { ...EMPTY_LYRICS };
     this._getYtmWC = null;
     this._supervisor = null;
     this._uiWindows = new Set(); // BrowserWindow refs hosting our own pages
     this._lastStatus = { status: 'starting', detail: '' };
     this._onOpenSettings = () => {};
     this._onToggleMini = () => {};
+    this._onToggleLyrics = () => {};
+    this._onLyricsRefetch = () => {};
   }
 
-  setRefs({ getYtmWebContents, supervisor, onOpenSettings, onToggleMini }) {
+  setRefs({ getYtmWebContents, supervisor, onOpenSettings, onToggleMini, onToggleLyrics }) {
     if (getYtmWebContents) this._getYtmWC = getYtmWebContents;
     if (supervisor) this._supervisor = supervisor;
     if (onOpenSettings) this._onOpenSettings = onOpenSettings;
     if (onToggleMini) this._onToggleMini = onToggleMini;
+    if (onToggleLyrics) this._onToggleLyrics = onToggleLyrics;
   }
 
   registerUI(win) {
@@ -73,6 +82,7 @@ class Hub extends EventEmitter {
     if (!win.webContents.isDestroyed()) {
       win.webContents.send(CH.STATE_PUSH, this.latest);
       win.webContents.send(CH.SUPERVISOR_STATUS, this._lastStatus);
+      win.webContents.send(CH.LYRICS_PUSH, this.latestLyrics);
     }
   }
 
@@ -103,6 +113,14 @@ class Hub extends EventEmitter {
         win.webContents.send(channel, payload);
       }
     }
+  }
+
+  // Fan out a new LyricsState (produced by integrations/lyrics.js) to every one
+  // of our windows, and remember it so a window opened later is primed with it.
+  pushLyrics(payload) {
+    this.latestLyrics = payload;
+    this._broadcast(CH.LYRICS_PUSH, payload);
+    this.emit('lyrics', payload);
   }
 
   pushSupervisorStatus(status, detail) {
@@ -137,6 +155,8 @@ class Hub extends EventEmitter {
     });
 
     ipcMain.handle(CH.GET_STATE, () => this.latest);
+    ipcMain.handle(CH.GET_LYRICS, () => this.latestLyrics);
+    ipcMain.on(CH.LYRICS_REFETCH, (_e, query) => this._onLyricsRefetch(query));
     ipcMain.handle(CH.GET_CONFIG, () => config.all());
     ipcMain.handle(CH.APP_INFO, () => {
       const { APP_NAME, APP_VERSION } = require('../shared/constants');
@@ -158,6 +178,7 @@ class Hub extends EventEmitter {
     ipcMain.on(CH.CONTROL, (_e, { action, value }) => this.sendCommand(action, value));
     ipcMain.on(CH.OPEN_SETTINGS, () => this._onOpenSettings());
     ipcMain.on(CH.TOGGLE_MINI, () => this._onToggleMini());
+    ipcMain.on(CH.TOGGLE_LYRICS, () => this._onToggleLyrics());
   }
 }
 
