@@ -114,6 +114,23 @@ function qs(params) {
   return sp.toString();
 }
 
+// Generic JSON GET with a hard timeout, shared by every provider.
+async function getJson(url, extraHeaders) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await net.fetch(url, {
+      headers: { 'User-Agent': UA, Accept: 'application/json', ...(extraHeaders || {}) },
+      signal: ctrl.signal,
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function apiGet(pathAndQuery) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -179,6 +196,82 @@ async function lookup(track) {
   return best;
 }
 
+// ---- provider: NetEase ----------------------------------------------------
+// Fallback for what LRCLIB doesn't have. Its catalogue is far deeper on obscure,
+// regional and non-English releases, and it stores standard LRC, so the same
+// parser handles it. Public read-only endpoints — no account, no key.
+
+const NETEASE = 'https://music.163.com/api';
+const NETEASE_HEADERS = { Referer: 'https://music.163.com/', Cookie: 'appver=2.0.2' };
+
+async function neteaseLookup(track) {
+  const query = `${cleanTitle(track.title)} ${cleanArtist(track.artist)}`.trim();
+  if (!query) return null;
+
+  const found = await getJson(
+    `${NETEASE}/search/get?${qs({ s: query, type: 1, limit: 8, offset: 0 })}`,
+    NETEASE_HEADERS
+  );
+  const songs = (found && found.result && found.result.songs) || [];
+  if (!songs.length) return null;
+
+  // Same duration-proximity rule as LRCLIB, so a cover or a live cut can't win.
+  const wanted = track.duration > 0 ? Math.round(track.duration) : 0;
+  const scored = songs
+    .map((s) => ({ s, delta: wanted && s.duration ? Math.abs(s.duration / 1000 - wanted) : 999 }))
+    .sort((a, b) => a.delta - b.delta);
+  const best = wanted ? scored.find((c) => c.delta <= 15) : scored[0];
+  if (!best) return null;
+
+  const detail = await getJson(
+    `${NETEASE}/song/lyric?${qs({ id: best.s.id, lv: 1, kv: 1, tv: -1 })}`,
+    NETEASE_HEADERS
+  );
+  if (!detail || detail.nolyric || detail.uncollected) return null;
+  const lrc = (detail.lrc && detail.lrc.lyric) || '';
+  if (!lrc.trim()) return null;
+
+  // Shaped like an LRCLIB record so the rest of the pipeline is provider-blind.
+  return { syncedLyrics: lrc, plainLyrics: '', instrumental: false };
+}
+
+// ---- provider chain -------------------------------------------------------
+
+// Try each enabled source in order and report WHICH one answered, so the UI can
+// always tell the user where a set of lyrics came from and why.
+async function resolve(track) {
+  const providers = [
+    { name: 'LRCLIB', enabled: config.get('features.lyricsSourceLrclib', true), run: lookup },
+    { name: 'NetEase', enabled: config.get('features.lyricsSourceNetease', true), run: neteaseLookup },
+  ].filter((p) => p.enabled);
+
+  let primaryFailed = '';
+  for (let i = 0; i < providers.length; i++) {
+    const p = providers[i];
+    try {
+      const record = await p.run(track);
+      if (record) {
+        return {
+          record,
+          source: p.name,
+          fallback: i > 0,
+          reason: i > 0 ? primaryFailed || `No match on ${providers[0].name}` : '',
+        };
+      }
+      if (i === 0) primaryFailed = `No match on ${p.name}`;
+    } catch (err) {
+      // A provider being unreachable must not stop the ones after it.
+      // eslint-disable-next-line no-console
+      console.error(`[lyrics] ${p.name} failed:`, err.message);
+      if (i === 0) primaryFailed = `${p.name} unreachable`;
+      // If every provider fails, the last error decides the message the user
+      // sees, so re-throw only once nothing is left to try.
+      if (i === providers.length - 1) throw err;
+    }
+  }
+  return { record: null, source: '', fallback: false, reason: primaryFailed };
+}
+
 // ---- state machine --------------------------------------------------------
 
 // Turn a transport failure into something the user can actually act on.
@@ -228,16 +321,23 @@ function keyFor(state) {
   return state.videoId || `${state.title} ${state.artist}`;
 }
 
-function toLyricsState(state, record) {
+function toLyricsState(state, record, meta) {
+  const m = meta || {};
   const base = {
     ...EMPTY_LYRICS,
     videoId: state.videoId || '',
     title: state.title || '',
     artist: state.artist || '',
-    source: 'LRCLIB',
+    source: m.source || '',
+    fallback: !!m.fallback,
+    reason: m.reason || '',
   };
   if (!record) {
-    return { ...base, status: LYRICS_STATUS.NOT_FOUND, message: 'No lyrics found for this track.' };
+    return {
+      ...base,
+      status: LYRICS_STATUS.NOT_FOUND,
+      message: 'No lyrics found for this track on any enabled source.',
+    };
   }
   if (record.instrumental) {
     return { ...base, status: LYRICS_STATUS.OK, instrumental: true, message: 'Instrumental' };
@@ -282,9 +382,9 @@ async function fetchFor(state, { bypassCache = false } = {}) {
   });
 
   try {
-    const record = await lookup(state);
+    const { record, source, fallback, reason } = await resolve(state);
     if (mine !== token) return; // track changed while we were waiting
-    const next = toLyricsState(state, record);
+    const next = toLyricsState(state, record, { source, fallback, reason });
     remember(key, next);
     hub.pushLyrics(next);
   } catch (err) {

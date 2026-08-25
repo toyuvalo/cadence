@@ -2,6 +2,34 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.0] — 2026-08-25
+
+### Added
+- **A second lyrics source, for the songs LRCLIB doesn't have.** Lookups now fall
+  through a provider chain: **LRCLIB** first (open, purpose-built for synced
+  lyrics), then **NetEase**, whose catalogue is far deeper on obscure, regional
+  and non-English releases. NetEase stores standard LRC, so the existing parser
+  handles it unchanged, and the same duration-proximity rule applies — a cover or
+  a live cut still can't be mistaken for the studio version.
+- **You always know where lyrics came from.** The source is named in the lyrics
+  window footer, and when a fallback answers it gets a **`fallback` badge** whose
+  tooltip says exactly why it was used ("No match on LRCLIB" / "LRCLIB
+  unreachable"). Nothing is substituted silently.
+- **Each source can be turned off independently** — Settings → Lyrics →
+  *Source: LRCLIB* / *Source: NetEase*. Turn the fallback off and behaviour is
+  exactly as before.
+- A provider that is unreachable no longer stops the ones after it, so a blocked
+  or rate-limited source degrades to "try the next one" instead of an error.
+
+### Notes
+- `scripts/transcribe-lyrics.py` is an **unwired experiment**, not a shipped
+  feature (it isn't packaged into the installer). It downloads a track's audio
+  and transcribes it locally with faster-whisper for the case where no database
+  has the song. The transcription half works; the blocker is audio acquisition —
+  YouTube returns HTTP 403 for unauthenticated media fetches, so it would need
+  the app's own signed-in session cookies exported to a temp file for yt-dlp.
+  See the README note before going further with it.
+
 ## [1.3.3] — 2026-08-24
 
 ### Changed

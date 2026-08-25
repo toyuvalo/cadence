@@ -98,7 +98,9 @@ const EMPTY_LYRICS = {
   instrumental: false,
   lines: [], // [{ time: seconds, text: string }]
   plain: '', // unsynced fallback text
-  source: '', // e.g. 'LRCLIB'
+  source: '', // which provider answered, e.g. 'LRCLIB' / 'NetEase'
+  fallback: false, // true when the primary source missed and a backup answered
+  reason: '', // why the fallback was used, shown next to the source badge
   message: '',
   hint: '', // secondary line: what the user can do about it
 };
@@ -163,6 +165,13 @@ const DEFAULT_CONFIG = {
     // Blank = LRCLIB's public API. Point this at a self-hosted LRCLIB instance
     // if your network filters lrclib.net (must expose /get and /search).
     lyricsApiBase: '',
+    // Lyrics sources, tried in this order. LRCLIB is the primary (open, purpose
+    // built for synced lyrics); NetEase is a fallback with a much deeper
+    // catalogue of obscure, regional and non-English releases. Whichever one
+    // answers is named in the lyrics window, so you always know where a set of
+    // lyrics came from.
+    lyricsSourceLrclib: true,
+    lyricsSourceNetease: true,
   },
   // Auto-update. Cadence checks its own GitHub releases, downloads in the
   // background, and installs on quit — so a running app is never interrupted.

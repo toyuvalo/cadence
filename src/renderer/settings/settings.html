@@ -66,6 +66,8 @@
           ['features.lyricsAlwaysOnTop', 'switch', 'Float above all apps', 'Off: lyrics stay above Cadence but go behind when you switch apps. On: always on top of everything. Takes effect next time the lyrics window opens.'],
           ['features.lyricsOffsetMs', 'range', 'Timing offset', 'Nudge the lyrics if they run ahead of or behind the vocals.', { min:-5000, max:5000, step:250, suffix:'ms' }],
           ['features.lyricsFontSize', 'range', 'Lyrics text size', 'Size of the active line.', { min:14, max:64, step:2, suffix:'px' }],
+          ['features.lyricsSourceLrclib', 'switch', 'Source: LRCLIB (primary)', 'Open, purpose-built synced-lyrics database. Tried first.'],
+          ['features.lyricsSourceNetease', 'switch', 'Source: NetEase (fallback)', 'Only used when LRCLIB has no match — much deeper on obscure, regional and non-English releases. The lyrics window shows a “fallback” badge when it answers.'],
           ['features.lyricsApiBase', 'text', 'Lyrics server', 'Blank = lrclib.net. Point at a self-hosted LRCLIB if your network blocks it.', { placeholder:'https://lrclib.net/api' }],
         ]},
         { title: 'Appearance', items: [

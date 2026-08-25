@@ -68,7 +68,13 @@
         padding:3px 7px; font-size:11px; font-family:inherit; }
       footer button:hover { color:#fff; background:rgba(255,255,255,.09); }
       #offset { min-width:46px; text-align:center; font-variant-numeric:tabular-nums; }
-      #src { opacity:.75; }
+      #src { opacity:.75; display:flex; align-items:center; gap:5px; }
+      /* A fallback source is called out rather than shown silently — you should
+         always know when lyrics came from somewhere other than the primary. */
+      #src .badge {
+        padding:1px 6px; border-radius:999px; font-size:10px; font-weight:600;
+        background:rgba(255,45,85,.18); color:#ff8098; border:1px solid rgba(255,45,85,.25);
+      }
     </style>
   </head>
   <body>
@@ -106,7 +112,7 @@
           <button id="smaller" title="Smaller text">A−</button>
           <button id="bigger" title="Bigger text">A+</button>
         </div>
-        <span id="src">LRCLIB</span>
+        <span id="src" title="Where these lyrics came from"></span>
       </footer>
     </div>
 
@@ -221,6 +227,24 @@
         $('statusHint').textContent = (lyrics && lyrics.hint) || '';
       }
 
+      function paintSource() {
+        const el = $('src');
+        el.textContent = '';
+        if (!lyrics || !lyrics.source) return;
+        if (lyrics.fallback) {
+          const b = document.createElement('span');
+          b.className = 'badge';
+          b.textContent = 'fallback';
+          el.appendChild(b);
+          el.title = `${lyrics.source} — used because: ${lyrics.reason || 'the primary source had no match'}`;
+        } else {
+          el.title = `Lyrics from ${lyrics.source}`;
+        }
+        const name = document.createElement('span');
+        name.textContent = lyrics.source;
+        el.appendChild(name);
+      }
+
       function paintHeader() {
         const s = state || {};
         $('head-title').textContent = s.hasSong ? (s.title || 'Unknown') : 'Nothing playing';
@@ -241,6 +265,7 @@
         const s = sig(l);
         if (s !== rendered) { rendered = s; build(); }
         paintStatus();
+        paintSource();
       });
       C.onConfigChanged((c) => { cfg = c; applyCfg(); });
 
@@ -283,7 +308,7 @@
 
       Promise.all([C.getState(), C.getConfig(), C.getLyrics()]).then(([s, c, l]) => {
         state = s; cfg = c; lyrics = l;
-        applyCfg(); paintHeader(); rendered = sig(l); build(); paintStatus();
+        applyCfg(); paintHeader(); rendered = sig(l); build(); paintStatus(); paintSource();
       });
       requestAnimationFrame(tick);
     </script>
