@@ -11,7 +11,8 @@
     "dev": "electron . --dev",
     "dist": "electron-builder --win",
     "dist:dir": "electron-builder --win --dir",
-    "release": "electron-builder --win --publish always",
+    "release": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1",
+    "release:dry": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1 -DryRun",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
