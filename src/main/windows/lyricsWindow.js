@@ -90,13 +90,29 @@ function isOpen() {
   return !!(winRef && !winRef.isDestroyed());
 }
 
-// Live-apply the float-over-everything preference from Settings. The parent
-// relationship is fixed at creation time, so switching it off also drops the
-// window back to "above Cadence only" — which is the parented default.
+// Live-apply the float-over-everything preference from Settings — no reopen
+// needed. The two modes are mutually exclusive:
+//   off (default) -> child of the main window: above Cadence, behind any other
+//                    app you switch to (a browser, an editor, anything).
+//   on            -> detached and pinned above every window on the desktop.
+// Both halves matter: clearing alwaysOnTop without restoring the parent would
+// leave the panel as a plain top-level window that Cadence itself covers.
 function applyConfig(cfg) {
   if (!isOpen()) return;
   const onTop = !!(cfg.features && cfg.features.lyricsAlwaysOnTop);
-  winRef.setAlwaysOnTop(onTop, onTop ? 'screen-saver' : 'normal');
+  const parent = mainWindow.getWindow();
+  try {
+    if (onTop) {
+      winRef.setParentWindow(null);
+      winRef.setAlwaysOnTop(true, 'screen-saver');
+    } else {
+      winRef.setAlwaysOnTop(false);
+      if (parent && !parent.isDestroyed()) winRef.setParentWindow(parent);
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[lyrics] could not change stacking mode:', err.message);
+  }
 }
 
 module.exports = { open, close, toggle, isOpen, applyConfig };

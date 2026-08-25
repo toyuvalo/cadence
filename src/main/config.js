@@ -21,6 +21,51 @@ function deepMerge(base, override) {
   return out;
 }
 
+// One-time repairs for values that a PREVIOUS version persisted badly. Changing
+// a default in DEFAULT_CONFIG is not enough on its own: deepMerge lets the
+// stored value win, which is correct for real user choices but means a bad
+// default keeps haunting everyone who ran the version that shipped it.
+// Each migration runs once, recorded by id in state.migrationsApplied.
+const MIGRATIONS = [
+  {
+    id: 'lyrics-float-above-all-2026-08',
+    apply(data) {
+      // 1.2.0–1.3.x defaulted features.lyricsAlwaysOnTop to TRUE, so the lyrics
+      // panel floated above every other application, not just Cadence. The
+      // default is now false; this clears the persisted true it left behind.
+      // Anyone who genuinely wants it can turn it back on — the toggle applies
+      // live, and this migration never runs again.
+      if (data.features && data.features.lyricsAlwaysOnTop === true) {
+        data.features.lyricsAlwaysOnTop = false;
+        return true;
+      }
+      return false;
+    },
+  },
+];
+
+function runMigrations(data) {
+  const done = new Set((data.state && data.state.migrationsApplied) || []);
+  let changed = false;
+  for (const m of MIGRATIONS) {
+    if (done.has(m.id)) continue;
+    try {
+      if (m.apply(data)) changed = true;
+    } catch (err) {
+      // A failed migration must never prevent startup.
+      // eslint-disable-next-line no-console
+      console.error(`[config] migration ${m.id} failed:`, err.message);
+    }
+    done.add(m.id);
+    changed = true;
+  }
+  if (changed) {
+    if (!data.state) data.state = {};
+    data.state.migrationsApplied = [...done];
+  }
+  return data;
+}
+
 function getPath(obj, dotted) {
   return dotted.split('.').reduce((acc, k) => (acc == null ? acc : acc[k]), obj);
 }
@@ -52,7 +97,7 @@ class Config extends EventEmitter {
       this._store = null;
       raw = {};
     }
-    this._data = deepMerge(DEFAULT_CONFIG, raw);
+    this._data = runMigrations(deepMerge(DEFAULT_CONFIG, raw));
     this._persist();
   }
 

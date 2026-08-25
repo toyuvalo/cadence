@@ -212,6 +212,7 @@ const DEFAULT_CONFIG = {
     lastUrl: '',
     volume: 60,
     lyricsBounds: { width: 420, height: 560, x: undefined, y: undefined },
+    migrationsApplied: [], // ids of one-time config repairs already run
   },
 };
 

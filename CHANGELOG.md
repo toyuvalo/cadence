@@ -2,6 +2,21 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.1] — 2026-08-25
+
+### Fixed
+- **The lyrics panel really does stay above Cadence only now.** 1.3.3 changed the
+  default to "don't float above other apps", but that fix never reached anyone
+  who had already run 1.2.0–1.3.x: `deepMerge` lets the value stored on disk win
+  over the default, which is right for genuine user choices and wrong for a bad
+  default. Added a one-time config migration (`state.migrationsApplied`) that
+  clears the persisted `true` exactly once.
+- **The Float above all apps toggle now applies immediately**, instead of only
+  when the lyrics window is next opened. Turning it off re-parents the panel to
+  the main window; turning it on detaches and pins it. Previously, clearing
+  `alwaysOnTop` without restoring the parent could leave the panel as a plain
+  window that Cadence itself covered.
+
 ## [1.4.0] — 2026-08-25
 
 ### Added
