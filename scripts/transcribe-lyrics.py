@@ -46,6 +46,10 @@ def download_audio(video_id, workdir):
     out = os.path.join(workdir, "audio.%(ext)s")
     cmd = [
         "yt-dlp",
+        # Hermetic invocation: a user/global yt-dlp config can silently inject
+        # flags (this bit RipWave, where an injected `-x` turned MP4 output into
+        # MP3s for months while still exiting 0). Never inherit ambient config.
+        "--ignore-config",
         # Plain `bestaudio` on purpose: bitrate-filtered selectors (e.g.
         # abr<=128) silently exclude YouTube's standard 128.93 kbps opus stream
         # and fail the whole download.
