@@ -2,6 +2,21 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.2] — 2026-08-27
+
+### Internal
+- **Cadence now has static analysis.** The repo shipped to a real user with no
+  linter and no pre-commit gate of any kind. Added `eslint.config.mjs` (main
+  process as Node/CommonJS, preload with both Node and browser globals, `.mjs`
+  as ESM) plus a non-interactive `"lint": "eslint ."` script and the portfolio
+  pre-commit stack (eslint → lint-staged → Fallow → codex-testgen receipt).
+  Deliberately **not** `next lint` — that shape prompts for configuration on a
+  non-TTY agent commit and hangs forever.
+- Annotated the 9 errors the new linter surfaced. All are intentional
+  best-effort `catch {}` swallows (global-shortcut registration, Discord socket
+  teardown, resume-hint persistence, preload diagnostics); each now carries a
+  comment explaining why the failure is safe to drop. **No behavior change.**
+
 ## [1.4.1] — 2026-08-25
 
 ### Fixed

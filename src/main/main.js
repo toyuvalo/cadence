@@ -62,7 +62,7 @@ function bootstrap() {
         if (wc && !wc.isDestroyed()) {
           try {
             config.set('state.lastUrl', wc.getURL());
-          } catch {}
+          } catch { /* best-effort resume hint; a write failure must not block startup */ }
         }
       },
     });

@@ -136,7 +136,7 @@ function handleDisconnect() {
   if (socket) {
     try {
       socket.destroy();
-    } catch {}
+    } catch { /* socket may already be torn down — nothing to clean up */ }
     socket = null;
   }
   isReady = false;
@@ -177,7 +177,7 @@ function disconnect() {
     }
     try {
       socket.destroy();
-    } catch {}
+    } catch { /* socket may already be torn down — nothing to clean up */ }
     socket = null;
   }
   isReady = false;

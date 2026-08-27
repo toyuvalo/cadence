@@ -17,7 +17,7 @@ function diagFile(msg) {
   try {
     const p = require('path').join(require('os').tmpdir(), 'cadence-diag.log');
     require('fs').appendFileSync(p, `[${new Date().toISOString()}] preload: ${msg}\n`);
-  } catch {}
+  } catch { /* diagnostics only — never let logging break the preload */ }
 }
 
 const IPC = {

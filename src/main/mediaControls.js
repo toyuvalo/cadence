@@ -49,12 +49,12 @@ function registerShortcuts() {
   if (s.miniPlayer) {
     try {
       globalShortcut.register(s.miniPlayer, () => hub._onToggleMini());
-    } catch {}
+    } catch { /* accelerator already owned by another app — skip this binding */ }
   }
   if (s.lyrics) {
     try {
       globalShortcut.register(s.lyrics, () => hub._onToggleLyrics());
-    } catch {}
+    } catch { /* accelerator already owned by another app — skip this binding */ }
   }
   // Volume up/down support a repeat-friendly delta.
   if (s.volumeUp) {
@@ -63,7 +63,7 @@ function registerShortcuts() {
         const v = Math.min(100, (hub.latest.volume || 0) + 5);
         hub.sendCommand('volume', v);
       });
-    } catch {}
+    } catch { /* accelerator already owned by another app — skip this binding */ }
   }
   if (s.volumeDown) {
     try {
@@ -71,7 +71,7 @@ function registerShortcuts() {
         const v = Math.max(0, (hub.latest.volume || 0) - 5);
         hub.sendCommand('volume', v);
       });
-    } catch {}
+    } catch { /* accelerator already owned by another app — skip this binding */ }
   }
 }
 
