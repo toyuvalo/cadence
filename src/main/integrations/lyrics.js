@@ -205,6 +205,50 @@ async function lookup(track) {
 const NETEASE = 'https://music.163.com/api';
 const NETEASE_HEADERS = { Referer: 'https://music.163.com/', Cookie: 'appver=2.0.2' };
 
+// NetEase ships production credits as real timestamped LRC lines at ~00:00 —
+// `[00:00.05] 编曲 : Queen`, `[00:01.30]Writers：…`. They are indistinguishable
+// from lyrics to a parser, so without this the first thing you see on an English
+// track is a screen of Chinese credit labels.
+const NETEASE_CREDIT =
+  /^(?:作词|作曲|编曲|制作人|出品人|出品|发行|监制|混音|母带|录音|和声|配唱|吉他|贝斯|鼓|键盘|弦乐|策划|统筹|企划|词|曲|OP|SP|Produced\s+by|Producer|Writers?|Composer|Lyricist|Arranger|Mixing|Mastering|Samples?|Vocals?|Recorded|Engineer)\s*[:：]/i;
+
+// A `Samples：` block continues over unlabelled lines — `Stomp(1996)—Three 6
+// Mafia`. Only ever applied inside the leading credit block.
+const NETEASE_CREDIT_CONT = /\(\d{4}\)\s*[—–-]/;
+
+// Karaoke / instrumental / tribute farms upload renditions whose runtime tracks
+// the original to within a second or two, so a duration-only match picks them
+// happily. Reject them — unless the user is genuinely playing one.
+const NETEASE_IMPOSTOR =
+  /\b(instrumental|karaoke|backing track|originally performed|made popular by|tribute|in the style of)\b/i;
+
+// Strip credits from the TOP of an LRC only. A colon later in a song is far more
+// likely to be a real lyric than a credit, so the scan stops at the first line
+// that doesn't look like one.
+function stripNeteaseCredits(raw) {
+  const lines = String(raw || '').split(/\r?\n/);
+  let i = 0;
+  while (i < lines.length) {
+    const text = lines[i].replace(/\[[^\]]*\]/g, '').trim();
+    if (text === '' || NETEASE_CREDIT.test(text) || NETEASE_CREDIT_CONT.test(text)) { i++; continue; }
+    break;
+  }
+  return lines.slice(i).join('\n');
+}
+
+const normName = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9一-鿿]+/g, '');
+
+// Loose containment both ways: "Travis Scott" should match "Travis Scott", and
+// a NetEase entry crediting "Travis Scott, Drake" should match "Travis Scott".
+function neteaseArtistMatches(song, wantArtist) {
+  const want = normName(wantArtist);
+  if (!want) return false;
+  return (song.artists || []).some((a) => {
+    const n = normName(a.name);
+    return n && (n.includes(want) || want.includes(n));
+  });
+}
+
 async function neteaseLookup(track) {
   const query = `${cleanTitle(track.title)} ${cleanArtist(track.artist)}`.trim();
   if (!query) return null;
@@ -216,11 +260,28 @@ async function neteaseLookup(track) {
   const songs = (found && found.result && found.result.songs) || [];
   if (!songs.length) return null;
 
-  // Same duration-proximity rule as LRCLIB, so a cover or a live cut can't win.
+  const wantTitle = cleanTitle(track.title);
+  const wantArtist = cleanArtist(track.artist);
   const wanted = track.duration > 0 ? Math.round(track.duration) : 0;
+  // Only treat "instrumental"/"karaoke" as disqualifying if the track being
+  // played isn't itself one.
+  const wantsImpostor = NETEASE_IMPOSTOR.test(`${wantTitle} ${wantArtist}`);
+
   const scored = songs
-    .map((s) => ({ s, delta: wanted && s.duration ? Math.abs(s.duration / 1000 - wanted) : 999 }))
-    .sort((a, b) => a.delta - b.delta);
+    .filter((s) => {
+      if (wantsImpostor) return true;
+      const label = `${s.name} ${(s.artists || []).map((a) => a.name).join(' ')}`;
+      return !NETEASE_IMPOSTOR.test(label);
+    })
+    .map((s) => ({
+      s,
+      delta: wanted && s.duration ? Math.abs(s.duration / 1000 - wanted) : 999,
+      artistOk: neteaseArtistMatches(s, wantArtist),
+    }))
+    // Duration proximity alone will pick a same-length unrelated track, so a
+    // real artist match outranks a marginally closer runtime.
+    .sort((a, b) => (a.artistOk === b.artistOk ? a.delta - b.delta : a.artistOk ? -1 : 1));
+
   const best = wanted ? scored.find((c) => c.delta <= 15) : scored[0];
   if (!best) return null;
 
@@ -229,7 +290,9 @@ async function neteaseLookup(track) {
     NETEASE_HEADERS
   );
   if (!detail || detail.nolyric || detail.uncollected) return null;
-  const lrc = (detail.lrc && detail.lrc.lyric) || '';
+  const lrc = stripNeteaseCredits((detail.lrc && detail.lrc.lyric) || '');
+  // Credits-only entries exist (instrumentals with production notes). After the
+  // strip there is nothing to sing, so report a miss rather than a blank pane.
   if (!lrc.trim()) return null;
 
   // Shaped like an LRCLIB record so the rest of the pipeline is provider-blind.
@@ -501,4 +564,6 @@ module.exports = {
   cleanTitle,
   cleanArtist,
   classifyNetworkError,
+  stripNeteaseCredits,
+  neteaseArtistMatches,
 };

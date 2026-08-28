@@ -2,6 +2,30 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.4] — 2026-08-28
+
+### Fixed
+- **Chinese text at the start of English songs.** NetEase ships production
+  credits as real timestamped LRC lines at ~00:00 — `[00:00.05] 编曲 : Queen`,
+  `[00:00.20] 制作人 : …`, plus `Writers：` / `Samples：` blocks that continue
+  over several unlabelled lines. They're indistinguishable from lyrics to a
+  parser, so whenever the NetEase fallback answered, the first thing on screen
+  was a wall of credits. Cadence now strips that block — but only from the
+  *top* of the file, since a colon later in a song is far more likely to be a
+  real lyric. Genuine Chinese lyrics are untouched, which is the entire point of
+  the fallback.
+- **The NetEase fallback could return confidently wrong lyrics.** It picked
+  whichever search result had the closest runtime, with no check that the result
+  was the same song by the same artist — and karaoke/instrumental farms upload
+  renditions matching the original's runtime to within a second. *Alaska* by
+  Maggie Rogers matched *"Alaska (Instrumental)"* by **Guitar Dreamers**.
+  Matching now rejects instrumental/karaoke/tribute renditions (unless that's
+  what's actually playing) and ranks a real artist match above a marginally
+  closer runtime. When nothing matches confidently it reports a miss — no
+  lyrics beats wrong lyrics.
+- An entry whose lyrics are *only* credits now reports a miss instead of showing
+  an empty pane.
+
 ## [1.4.3] — 2026-08-28
 
 ### Fixed
