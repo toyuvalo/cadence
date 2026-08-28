@@ -4,6 +4,7 @@
 // Exposes a minimal, audited surface over contextBridge — no Node in the page.
 
 const { contextBridge, ipcRenderer } = require('electron');
+const { LYRICS_DEFAULT_API, LYRICS_MIRROR_API } = require('../shared/constants');
 
 const IPC = {
   GET_STATE: 'app:getState',
@@ -27,6 +28,13 @@ const IPC = {
 };
 
 contextBridge.exposeInMainWorld('cadence', {
+  // constants — so the lyrics/settings UIs never hardcode an endpoint that
+  // could drift from the one the main process actually uses.
+  lyricsEndpoints: Object.freeze({
+    default: LYRICS_DEFAULT_API,
+    mirror: LYRICS_MIRROR_API,
+  }),
+
   // queries
   getState: () => ipcRenderer.invoke(IPC.GET_STATE),
   getConfig: () => ipcRenderer.invoke(IPC.GET_CONFIG),

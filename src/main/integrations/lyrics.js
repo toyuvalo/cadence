@@ -24,9 +24,10 @@ const {
   APP_VERSION,
   LYRICS_STATUS,
   EMPTY_LYRICS,
+  LYRICS_DEFAULT_API,
 } = require('../../shared/constants');
 
-const DEFAULT_API = 'https://lrclib.net/api';
+const DEFAULT_API = LYRICS_DEFAULT_API;
 
 // Configurable so a blocked endpoint isn't a dead end: LRCLIB is self-hostable,
 // and some networks (ISP "safe browsing" filters, school/office gateways) block
@@ -240,8 +241,12 @@ async function neteaseLookup(track) {
 // Try each enabled source in order and report WHICH one answered, so the UI can
 // always tell the user where a set of lyrics came from and why.
 async function resolve(track) {
+  // Name the LRCLIB provider for where it is actually pointed, so a user on a
+  // mirror or a self-hosted instance can always see that from the source badge
+  // rather than wondering why "LRCLIB" is answering on a network that blocks it.
+  const lrclibName = apiBase() === DEFAULT_API ? 'LRCLIB' : 'LRCLIB (mirror)';
   const providers = [
-    { name: 'LRCLIB', enabled: config.get('features.lyricsSourceLrclib', true), run: lookup },
+    { name: lrclibName, enabled: config.get('features.lyricsSourceLrclib', true), run: lookup },
     { name: 'NetEase', enabled: config.get('features.lyricsSourceNetease', true), run: neteaseLookup },
   ].filter((p) => p.enabled);
 
@@ -276,45 +281,62 @@ async function resolve(track) {
 
 // Turn a transport failure into something the user can actually act on.
 //
-// The case that prompted this: a network-level web filter (safebrowse.io at the
-// gateway) blocks lrclib.net. On plain HTTP it injects a 302 to a warning page;
-// on HTTPS it can't, so it tears down the TLS handshake instead — which surfaces
-// as ERR_SSL_* / SEC_E_INVALID_TOKEN rather than anything resembling "blocked".
-// Reporting that as "could not reach the server" sends people hunting for an app
-// bug when the fix is to allowlist the domain on their router.
+// The case that prompted this: a network-level "safe browsing" web filter
+// blocks lrclib.net. On plain HTTP it injects a 302 to a warning page; on HTTPS
+// it can't, so it tears down the TLS handshake instead — which surfaces as
+// ERR_SSL_* / SEC_E_INVALID_TOKEN rather than anything resembling "blocked".
+// DNS stays clean throughout, so the domain resolves perfectly and then simply
+// refuses to connect. Reporting that as "could not reach the server" sends
+// people hunting for an app bug when the fix is a one-line allowlist entry.
 function classifyNetworkError(msg) {
   const m = String(msg || '');
   if (/ERR_NAME_NOT_RESOLVED|ENOTFOUND|EAI_AGAIN/i.test(m)) {
+    // A filter that works at the DNS layer looks exactly like this too, so the
+    // same walkthrough applies — the domain just needs to be allowed through.
     return {
-      message: 'Can’t resolve the lyrics server — DNS lookup failed.',
-      hint: 'Check your connection, or set a custom lyrics server in Settings.',
+      code: 'blocked',
+      message: 'Can’t resolve the lyrics server — the lookup was refused.',
+      hint: 'Usually a DNS-level filter (router, Pi-hole/AdGuard, or your ISP).',
     };
   }
   if (/ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED/i.test(m)) {
-    return { message: 'You appear to be offline.', hint: 'Lyrics will load once you reconnect.' };
+    return {
+      code: 'offline',
+      message: 'You appear to be offline.',
+      hint: 'Lyrics will load once you reconnect.',
+    };
   }
   // Electron's net stack reports net::ERR_*; SEC_E_*/schannel forms show up if a
   // request ever goes through a Windows-native path. Both mean the same thing
   // here: the handshake was torn down by something in the middle.
+  // The list is long on purpose: the SAME block surfaces with wildly different
+  // wording depending on which stack reports it. Chromium says `ERR_SSL_*`,
+  // Windows/schannel says `SEC_E_INVALID_TOKEN` or "corrupted frame was
+  // received", and a POSIX socket just says "broken pipe" / ECONNRESET. Every
+  // one of these was observed from a single filtered domain on one network.
   if (
-    /ERR_SSL|ERR_CERT|ERR_CONNECTION_CLOSED|ERR_CONNECTION_RESET|ERR_CONNECTION_ABORTED|ERR_EMPTY_RESPONSE|ERR_TUNNEL|ERR_PROXY|SEC_E_|schannel|SSL|TLS|handshake/i.test(
+    /ERR_SSL|ERR_CERT|ERR_CONNECTION_CLOSED|ERR_CONNECTION_RESET|ERR_CONNECTION_ABORTED|ERR_EMPTY_RESPONSE|ERR_TUNNEL|ERR_PROXY|ERR_QUIC|SEC_E_|schannel|SSL|TLS|handshake|corrupted frame|frame size|broken pipe|ECONNRESET|EPIPE/i.test(
       m
     )
   ) {
     return {
       // Deliberately specific: a broken TLS handshake to a host that resolves
       // fine is almost always in-path filtering, not a server outage.
+      code: 'blocked',
       message: 'The lyrics server is being blocked on this network.',
       hint:
-        'lrclib.net resolves but the secure connection is cut mid-handshake — ' +
-        'usually an ISP or router “safe browsing” filter. Allowlist lrclib.net ' +
-        'on your gateway, or point Settings at another lyrics server.',
+        'The connection is cut mid-handshake, which is what a “safe browsing” ' +
+        'filter looks like — not a problem with Cadence or with the server.',
     };
   }
   if (/abort/i.test(m)) {
-    return { message: 'The lyrics server timed out.', hint: 'It may be busy — Cadence will retry.' };
+    return {
+      code: 'timeout',
+      message: 'The lyrics server timed out.',
+      hint: 'It may be busy — Cadence will retry.',
+    };
   }
-  return { message: 'Lyrics lookup failed.', hint: 'See the log for details.' };
+  return { code: 'unknown', message: 'Lyrics lookup failed.', hint: 'See the log for details.' };
 }
 
 function keyFor(state) {
@@ -391,14 +413,15 @@ async function fetchFor(state, { bypassCache = false } = {}) {
     if (mine !== token) return;
     // eslint-disable-next-line no-console
     console.error('[lyrics] lookup failed:', err.message);
-    const { message, hint } = classifyNetworkError(err.message);
-    const blocked = /blocked on this network/.test(message);
+    const { code, message, hint } = classifyNetworkError(err.message);
+    const blocked = code === 'blocked';
     hub.pushLyrics({
       ...EMPTY_LYRICS,
       status: LYRICS_STATUS.ERROR,
       videoId: state.videoId || '',
       title: state.title || '',
       artist: state.artist || '',
+      code,
       message,
       hint,
     });

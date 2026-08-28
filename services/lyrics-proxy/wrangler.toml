@@ -1,0 +1,12 @@
+name = "cadence-lyrics-proxy"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+# Public mirror hostname. Cadence ships this as the one-click fallback for users
+# whose network filter blocks lrclib.net.
+routes = [
+  { pattern = "lyrics.dvlce.ca", custom_domain = true }
+]
+
+[observability]
+enabled = true

@@ -17,6 +17,17 @@ const APP_VERSION = require('../../package.json').version;
 const YTM_URL = 'https://music.youtube.com/';
 const YTM_ORIGIN = 'https://music.youtube.com';
 
+// LRCLIB's public API — the default and the recommended way to use Cadence.
+const LYRICS_DEFAULT_API = 'https://lrclib.net/api';
+
+// A cached, read-only mirror of LRCLIB, for people whose network filter blocks
+// lrclib.net and who can't change that filter (managed work/school networks,
+// ISP filters with no self-serve allowlist). It is a FALLBACK, not the default:
+// allowlisting lrclib.net is one change that fixes every app on the network and
+// keeps the user's lookups between them and LRCLIB with no middleman. The
+// lyrics window offers this only after a block has actually been detected.
+const LYRICS_MIRROR_API = 'https://lyrics.dvlce.ca/api';
+
 // A recent desktop Chrome UA. Electron's default UA contains "Electron" and the
 // app name, which some Google surfaces treat differently; presenting as plain
 // Chrome avoids "unsupported browser" friction and keeps us resilient to UA
@@ -103,6 +114,11 @@ const EMPTY_LYRICS = {
   reason: '', // why the fallback was used, shown next to the source badge
   message: '',
   hint: '', // secondary line: what the user can do about it
+  // Machine-readable failure kind, so the UI can react to a specific problem
+  // instead of pattern-matching the human-readable message. '' when fine.
+  // 'blocked' => a network filter is cutting the connection; the window offers
+  // the allowlist walkthrough and the mirror fallback.
+  code: '',
 };
 
 // Player commands understood by the ytm preload bridge.
@@ -162,8 +178,9 @@ const DEFAULT_CONFIG = {
     // above every other app too (for a second monitor / karaoke night).
     lyricsAlwaysOnTop: false,
     lyricsAutoScroll: true,
-    // Blank = LRCLIB's public API. Point this at a self-hosted LRCLIB instance
-    // if your network filters lrclib.net (must expose /get and /search).
+    // Blank = LRCLIB's public API (recommended). Point this at the Cadence
+    // mirror or a self-hosted LRCLIB instance if your network filters
+    // lrclib.net and you cannot allowlist it (must expose /get and /search).
     lyricsApiBase: '',
     // Lyrics sources, tried in this order. LRCLIB is the primary (open, purpose
     // built for synced lyrics); NetEase is a fallback with a much deeper
@@ -221,6 +238,8 @@ module.exports = {
   APP_VERSION,
   YTM_URL,
   YTM_ORIGIN,
+  LYRICS_DEFAULT_API,
+  LYRICS_MIRROR_API,
   UA_TEMPLATE,
   IPC,
   ACTIONS,

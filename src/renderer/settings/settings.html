@@ -68,7 +68,10 @@
           ['features.lyricsFontSize', 'range', 'Lyrics text size', 'Size of the active line.', { min:14, max:64, step:2, suffix:'px' }],
           ['features.lyricsSourceLrclib', 'switch', 'Source: LRCLIB (primary)', 'Open, purpose-built synced-lyrics database. Tried first.'],
           ['features.lyricsSourceNetease', 'switch', 'Source: NetEase (fallback)', 'Only used when LRCLIB has no match — much deeper on obscure, regional and non-English releases. The lyrics window shows a “fallback” badge when it answers.'],
-          ['features.lyricsApiBase', 'text', 'Lyrics server', 'Blank = lrclib.net. Point at a self-hosted LRCLIB if your network blocks it.', { placeholder:'https://lrclib.net/api' }],
+          ['features.lyricsApiBase', 'text', 'Lyrics server', 'Leave blank to use lrclib.net directly — recommended. If your network blocks it, the better fix is to allowlist lrclib.net on your router or provider’s filter. Where that isn’t possible (work/school networks), the Cadence mirror is a cached, read-only relay on a different domain. A self-hosted LRCLIB also works — it just needs /get and /search.', { placeholder:'https://lrclib.net/api  (default)', presets:[
+            { label:'Use LRCLIB directly', value:'', title:'The default — talk to lrclib.net with nothing in between.' },
+            { label:'Use the Cadence mirror', value:C.lyricsEndpoints.mirror, title:'For networks that block lrclib.net and can’t be changed.' },
+          ] }],
         ]},
         { title: 'Appearance', items: [
           ['appearance.zoom', 'range', 'Zoom', 'Interface zoom level (50–200%).', { min:50, max:200, step:5, suffix:'%' }],
@@ -111,9 +114,41 @@
           r.addEventListener('change', e => save(path, parseInt(e.target.value,10)));
           ctrl.appendChild(r); ctrl.appendChild(o);
         } else if (type==='text') {
-          ctrl = document.createElement('input'); ctrl.type='text'; ctrl.value=val||'';
-          ctrl.placeholder=(opts&&opts.placeholder)||''; ctrl.style.minWidth='210px';
-          ctrl.addEventListener('change', e => save(path, e.target.value.trim()));
+          const input = document.createElement('input'); input.type='text'; input.value=val||'';
+          input.placeholder=(opts&&opts.placeholder)||''; input.style.minWidth='210px';
+          input.addEventListener('change', e => save(path, e.target.value.trim()));
+          const presets = (opts && opts.presets) || [];
+          if (!presets.length) { ctrl = input; }
+          else {
+            // One-click endpoints beside the free-text field: nobody should have
+            // to retype a URL correctly to get unblocked, but the field stays
+            // editable for self-hosted instances.
+            ctrl = document.createElement('div');
+            ctrl.style.display='flex'; ctrl.style.flexDirection='column';
+            ctrl.style.alignItems='flex-end'; ctrl.style.gap='6px';
+            ctrl.appendChild(input);
+            const bar = document.createElement('div');
+            bar.style.display='flex'; bar.style.gap='6px'; bar.style.flexWrap='wrap';
+            bar.style.justifyContent='flex-end';
+            presets.forEach(p => {
+              const b = document.createElement('button');
+              b.textContent = p.label; b.title = p.title || '';
+              b.style.cssText = 'background:transparent;border:1px solid var(--line,rgba(255,255,255,.16));'
+                + 'color:var(--muted);border-radius:999px;padding:3px 10px;font-size:11px;'
+                + 'cursor:pointer;font-family:inherit';
+              const sync = () => {
+                const on = (input.value.trim() === p.value);
+                b.style.opacity = on ? '1' : '.72';
+                b.style.borderColor = on ? 'var(--accent,#ff2d55)' : 'var(--line,rgba(255,255,255,.16))';
+              };
+              b.addEventListener('click', () => { input.value = p.value; save(path, p.value); bar.dispatchEvent(new Event('sync')); });
+              bar.addEventListener('sync', sync);
+              sync();
+              bar.appendChild(b);
+            });
+            input.addEventListener('change', () => bar.dispatchEvent(new Event('sync')));
+            ctrl.appendChild(bar);
+          }
         } else if (type==='select') {
           ctrl = document.createElement('select');
           opts.options.forEach(op => { const e=document.createElement('option'); e.value=op; e.textContent=op; if(op===val)e.selected=true; ctrl.appendChild(e); });

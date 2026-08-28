@@ -2,6 +2,50 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.3] — 2026-08-28
+
+### Fixed
+- **A blocked lyrics server no longer looks like a Cadence bug.** Some networks
+  filter `lrclib.net` — ISP "safe browsing" add-ons are the usual culprit, along
+  with router content filters and DNS blockers. The block is unhelpfully
+  invisible: the domain still resolves to the right address, and the connection
+  is then cut mid-handshake, so it surfaces as an SSL error that looks like a
+  certificate fault or a server outage. Cadence now recognises that exact
+  signature and says what it actually is.
+
+### Added
+- **A walkthrough for getting unblocked, in the lyrics window.** When a filter
+  is detected, the window explains the situation and offers both routes out:
+  the recommended one — allowlist `lrclib.net` on the filter, which fixes it
+  once for every device and app on the network — with a breakdown of where that
+  setting lives for the common cases (provider security add-on, router admin
+  page, Pi-hole/AdGuard/NextDNS, antivirus web shield, managed work/school
+  networks). It also notes that this is a *network* setting, so anyone else
+  running Cadence needs `lrclib.net` reachable on their own network too.
+- **A one-click mirror, for filters you can't change.** Where allowlisting isn't
+  an option — a managed work or campus network, or an ISP filter with no
+  self-serve allowlist — Cadence can route lookups through a cached, read-only
+  mirror of the LRCLIB API on a different hostname, which the filter has nothing
+  to match on. Available from the blocked panel and from
+  **Settings › Lyrics › Lyrics server**, which now has one-click *Use LRCLIB
+  directly* / *Use the Cadence mirror* buttons alongside the free-text field
+  (still there for self-hosted LRCLIB instances). The mirror is deliberately not
+  the default: talking to LRCLIB directly is fewer moving parts and no
+  middleman.
+- The source badge now reads **LRCLIB (mirror)** when a custom endpoint is in
+  use, so it's always visible when lookups aren't going to LRCLIB directly.
+
+### Internal
+- Lyrics failures now carry a machine-readable `code` (`blocked`, `offline`,
+  `timeout`, `unknown`) instead of the UI regex-matching the human-readable
+  error string.
+- `LYRICS_DEFAULT_API` / `LYRICS_MIRROR_API` live in `src/shared/constants.js`
+  and reach the renderers through the preload bridge, so no window hardcodes an
+  endpoint that could drift from the one the main process uses.
+- The mirror worker's source lives in `services/lyrics-proxy/` — read-only,
+  GET-only, restricted to the two LRCLIB lookup endpoints, edge-cached for 24h,
+  and it forwards no client headers, cookies or IPs upstream.
+
 ## [1.4.2] — 2026-08-27
 
 ### Internal

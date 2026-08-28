@@ -43,6 +43,24 @@ export default [
     },
   },
   {
+    // Cloudflare Worker (the lyrics mirror). Not Node and not a browser: an ESM
+    // module against the Workers runtime, whose globals are the service-worker
+    // set (fetch/Request/Response/caches) rather than either of those.
+    files: ["services/**/src/**/*.js"],
+    languageOptions: {
+      globals: { ...globals.serviceworker, ...globals.browser },
+      ecmaVersion: 2022,
+      sourceType: "module",
+    },
+    rules: {
+      "no-undef": "error",
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "no-eval": "error",
+      "no-implied-eval": "error",
+      "no-cond-assign": "error",
+    },
+  },
+  {
     // Preload scripts straddle both worlds: Node require() plus the page's
     // window/document. Electron exposes both in the isolated preload realm.
     files: ["src/preload/**/*.js"],

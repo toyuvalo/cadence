@@ -86,9 +86,49 @@ The panel floats above Cadence but goes behind when you switch apps; flip
 **Float above all apps** in Settings if you want it over everything (second
 monitor, karaoke night).
 
-> Some ISP/router "safe browsing" filters block `lrclib.net`. If lyrics report
-> that the server is blocked, allowlist the domain on your gateway — or point
-> **Settings → Lyrics → Lyrics server** at your own LRCLIB instance.
+### If lyrics say they're blocked on your network
+
+Some networks filter `lrclib.net`. ISP "safe browsing" / "advanced security"
+add-ons are the usual cause, along with router content filters and DNS-level
+blockers. It's worth knowing what this looks like, because it doesn't look like
+a block: the domain still resolves to the correct address, and the connection is
+then cut mid-handshake, so it surfaces as an SSL error that reads like a broken
+certificate or a dead server. Cadence detects that signature and shows a
+walkthrough instead of a generic failure.
+
+**The recommended fix — allowlist `lrclib.net`.** One change, and it stays fixed
+for every device and every app on the network, with nothing between you and the
+lyrics database. Where the setting lives depends on what's doing the filtering:
+
+| Filter | Where to allow the domain |
+|---|---|
+| ISP security add-on (most common) | Your provider's own app or account page — *not* the router's admin page. Look for a security/protection section with an allowed-sites list. |
+| Router / gateway admin page | Parental Controls, Managed Sites, Access Restrictions, or Content Filtering. |
+| Pi-hole, AdGuard Home, NextDNS | Add `lrclib.net` to the allowlist. |
+| Antivirus / security suite | Web-shield or HTTPS-scanning exclusions. |
+| Work, school or campus network | Usually not yours to change — use the mirror below. |
+
+Some ISP filters also show a browser warning page with a "visit anyway" button
+when you load the blocked site over plain `http://`. That works, but the grant
+is tied to your public IP and can expire without notice.
+
+> This is a **network** setting, not a Cadence one. If you share Cadence with
+> someone else, `lrclib.net` has to be reachable on *their* network too — and a
+> laptop that moves between home and work may need it allowed in both places.
+
+**If you can't change the filter**, open **Settings → Lyrics → Lyrics server**
+and hit **Use the Cadence mirror** (or the same button in the lyrics window's
+blocked panel). Lookups then go through a cached, read-only mirror of the LRCLIB
+API on a different hostname, which the filter has nothing to match on. It is
+GET-only, restricted to the two lookup endpoints, and forwards no headers,
+cookies or client IPs upstream — the mirror sees a song title and an artist name
+and nothing else. Source is in [`services/lyrics-proxy/`](services/lyrics-proxy/).
+
+It's a fallback rather than the default on purpose: talking to LRCLIB directly
+is fewer moving parts, no middleman, and nothing that can go down separately.
+
+The same field also accepts a **self-hosted LRCLIB** instance — anything that
+exposes `/get` and `/search`.
 
 ## Updates
 

@@ -60,6 +60,53 @@
         border-top-color:#ff2d55; border-radius:50%; animation:spin .8s linear infinite; }
       @keyframes spin { to { transform:rotate(360deg); } }
 
+      /* "Lyrics are blocked" walkthrough. A filtered domain is the one failure a
+         user can actually fix themselves, so it gets a real explanation and the
+         two routes out — rather than a dead-end error string. Text is
+         selectable here (unlike the rest of the window) so a domain name or a
+         setting name can be copied out. */
+      /* A flex sibling of #scroller rather than an absolute overlay: an overlay
+         at inset:0 scrolls its own buttons up underneath the header and clips
+         the last paragraph behind the footer. This keeps the track header and
+         the footer controls where they are and scrolls only the panel. */
+      #fixit { flex:1; min-height:0; z-index:4; display:none; flex-direction:column;
+        padding:4px 14px 14px; overflow-y:auto; -webkit-user-select:text; user-select:text; }
+      #fixit.show { display:flex; }
+      body.blocked #scroller { display:none; }
+      #fixit::-webkit-scrollbar { width:8px; }
+      #fixit::-webkit-scrollbar-thumb { background:rgba(255,255,255,.12); border-radius:99px; }
+      #fixit h2 { font-size:14px; margin:0 0 5px; color:#e9e9ee; font-weight:650; }
+      #fx-why { font-size:11.5px; line-height:1.6; color:#8b8f98; margin:0 0 11px; }
+      .fx-card { border:1px solid rgba(255,255,255,.09); border-radius:12px;
+        padding:11px 12px; margin-bottom:9px; background:rgba(255,255,255,.03); }
+      .fx-card.primary { border-color:rgba(255,45,85,.3); background:rgba(255,45,85,.06); }
+      .fx-tag { font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+        color:#ff8098; margin-bottom:5px; }
+      .fx-card.alt .fx-tag { color:#7d818b; }
+      .fx-card h3 { font-size:12.5px; margin:0 0 5px; color:#f1f1f3; font-weight:600; }
+      .fx-card p { font-size:11px; line-height:1.6; color:#8b8f98; margin:0 0 8px; }
+      .fx-card ol { margin:0 0 9px; padding-left:16px; font-size:11px; line-height:1.7; color:#9a9ea7; }
+      .fx-dom { font-family:Consolas,"Cascadia Mono",monospace; background:rgba(255,255,255,.09);
+        border-radius:5px; padding:1px 5px; color:#fff; font-size:.95em; }
+      #fixit button { background:#ff2d55; color:#fff; border:0; border-radius:999px;
+        font-size:11.5px; font-weight:600; padding:6px 14px; cursor:pointer; font-family:inherit; }
+      #fixit button:hover { filter:brightness(1.08); }
+      .fx-ghost { background:transparent !important; border:1px solid rgba(255,255,255,.17) !important;
+        color:#c9ccd2 !important; }
+      .fx-ghost:hover { background:rgba(255,255,255,.06) !important; filter:none !important; }
+      .fx-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+      .fx-link { background:none !important; border:0 !important; color:#ff8098 !important;
+        padding:0 !important; text-decoration:underline; font-weight:500 !important; }
+      #fx-where { font-size:11px; color:#9a9ea7; line-height:1.65; margin-top:9px;
+        padding-top:9px; border-top:1px solid rgba(255,255,255,.08); display:none; }
+      #fx-where.show { display:block; }
+      #fx-where dt { color:#d4d7dd; font-weight:600; margin-top:7px; }
+      #fx-where dt:first-child { margin-top:0; }
+      #fx-where dd { margin:1px 0 0; }
+      #fx-note { font-size:10.5px; line-height:1.6; color:#7d818b; margin:2px 0 0; }
+      #fx-done { font-size:11px; color:#6ecb7b; margin-top:8px; display:none; }
+      #fx-done.show { display:block; }
+
       footer { display:flex; align-items:center; justify-content:space-between; gap:8px;
         padding:7px 12px 9px; border-top:1px solid rgba(255,255,255,.06); z-index:2;
         font-size:11px; color:#7d818b; -webkit-app-region:drag; }
@@ -100,6 +147,68 @@
         <div class="msg" id="statusMsg">Looking for lyrics…</div>
         <div class="msg" id="statusHint" style="font-size:11.5px;opacity:.75;max-width:34ch"></div>
         <button id="statusBtn" style="display:none">Try again</button>
+      </div>
+
+      <div id="fixit">
+        <h2>Lyrics are blocked on this network</h2>
+        <p id="fx-why"></p>
+
+        <div class="fx-card primary">
+          <div class="fx-tag">Recommended</div>
+          <h3>Allow <span class="fx-dom">lrclib.net</span> through the filter</h3>
+          <p>
+            One change, and it stays fixed — for every device and every app on the network,
+            with nothing sitting between you and the lyrics database.
+          </p>
+          <ol>
+            <li>Open your router&rsquo;s admin page, or your internet provider&rsquo;s app.</li>
+            <li>Find its content filter — often called <em>safe browsing</em>, <em>advanced
+              security</em>, <em>parental controls</em> or <em>managed sites</em>.</li>
+            <li>Add <span class="fx-dom">lrclib.net</span> to its allowed list.</li>
+            <li>Come back here and hit Try again.</li>
+          </ol>
+          <div class="fx-row">
+            <button id="fx-retry">Try again</button>
+            <button class="fx-link" id="fx-toggle">Where exactly?</button>
+          </div>
+          <dl id="fx-where">
+            <dt>Your provider&rsquo;s security add-on</dt>
+            <dd>The most common cause. Managed in your provider&rsquo;s own app or account
+              page — <em>not</em> the router&rsquo;s admin page. Look for a security or
+              protection section with an allowed-sites list. Visiting the blocked site in a
+              browser may also show a warning page with a &ldquo;visit anyway&rdquo; button,
+              but that grant can quietly expire.</dd>
+            <dt>Router or gateway admin page</dt>
+            <dd>Look under Parental Controls, Managed Sites, Access Restrictions or
+              Content Filtering.</dd>
+            <dt>Pi-hole, AdGuard Home, NextDNS or similar</dt>
+            <dd>Add <span class="fx-dom">lrclib.net</span> to the allowlist.</dd>
+            <dt>Antivirus or security suite</dt>
+            <dd>Check its web-shield or HTTPS-scanning exclusions.</dd>
+            <dt>Work, school or campus network</dt>
+            <dd>You almost certainly can&rsquo;t change this one. Use the mirror below.</dd>
+          </dl>
+        </div>
+
+        <div class="fx-card alt">
+          <div class="fx-tag">If you can&rsquo;t change the filter</div>
+          <h3>Use the Cadence mirror</h3>
+          <p>
+            Sends lookups through a cached mirror on a different domain, so the filter has
+            nothing to match on. Read-only, and your device details never reach the lyrics
+            database. You can undo this any time in Settings &rsaquo; Lyrics.
+          </p>
+          <div class="fx-row">
+            <button class="fx-ghost" id="fx-mirror">Switch to the mirror</button>
+          </div>
+          <div id="fx-done">Switched to the mirror — looking up lyrics again…</div>
+        </div>
+
+        <p id="fx-note">
+          This is a network setting, not a Cadence one: anyone else you share Cadence with
+          needs <span class="fx-dom">lrclib.net</span> reachable on <em>their</em> network
+          too, and a laptop that moves between networks may need it allowed on each.
+        </p>
       </div>
 
       <footer>
@@ -212,6 +321,18 @@
         const el = $('status');
         const st = lyrics ? lyrics.status : 'idle';
         const hasLines = !!(lyrics && lyrics.lines.length) && !(lyrics && lyrics.instrumental);
+
+        // A filtered domain is the one failure the user can actually fix, so it
+        // gets the walkthrough panel instead of the generic one-line error.
+        const blocked = st === 'error' && lyrics && lyrics.code === 'blocked';
+        $('fixit').classList.toggle('show', blocked);
+        document.body.classList.toggle('blocked', blocked);
+        if (blocked) {
+          $('fx-why').textContent = (lyrics && lyrics.hint) || '';
+          el.classList.add('hidden');
+          return;
+        }
+
         if (st === 'ok' && hasLines) { el.classList.add('hidden'); return; }
         el.classList.remove('hidden');
         const spin = st === 'loading';
@@ -272,6 +393,20 @@
       $('close').onclick = () => C.toggleLyrics();
       $('refetch').onclick = () => C.refetchLyrics();
       $('statusBtn').onclick = () => C.refetchLyrics();
+
+      // ---- blocked-network walkthrough ------------------------------------
+      $('fx-retry').onclick = () => C.refetchLyrics();
+      $('fx-toggle').onclick = () => {
+        const open = $('fx-where').classList.toggle('show');
+        $('fx-toggle').textContent = open ? 'Hide' : 'Where exactly?';
+      };
+      $('fx-mirror').onclick = async () => {
+        $('fx-mirror').disabled = true;
+        await C.setConfig({ features: { lyricsApiBase: C.lyricsEndpoints.mirror } });
+        $('fx-done').classList.add('show');
+        // The config write lands first, so the retry already uses the mirror.
+        C.refetchLyrics();
+      };
 
       function nudge(ms) {
         const cur = (cfg.features.lyricsOffsetMs || 0) + ms;
