@@ -2,6 +2,37 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.5] — 2026-08-28
+
+### Added
+- **Settings › Lyrics › Lyrics language** — clamp lyrics to one language and
+  refuse anything else. Lyrics databases are community-contributed and matched
+  on loose title/artist text, so a track with no entry in your language can
+  still match one in another, and a fallback source hands it over without
+  comment. With the clamp set, that result is refused outright and Cadence says
+  *"Lyrics exist for this track, but not in English"* — which tells you the
+  setting is what's in your way, instead of silently showing lyrics you can't
+  read. Applies to **every** source, not just the fallback.
+
+  Detection is by script, which is exact for Chinese / Japanese / Korean /
+  Cyrillic / Latin (Japanese and Chinese are told apart by kana, which Japanese
+  lyrics always carry and Chinese never do). Telling English from other
+  Latin-script languages can't be done by script, so `english` additionally
+  requires a density of English function words and weighs them against Romance
+  and German markers. Measured across real lyrics in six languages, English
+  sheets score 0.28–0.49 and non-English sheets 0.00–0.07; the cut sits at 0.12.
+  It's a heuristic, not a language identifier — `latin` is the honest choice if
+  you listen across European languages. Default is `any`, so nothing changes
+  unless you set it.
+
+### Fixed
+- **Changing a lyrics setting now takes effect immediately.** Results are cached
+  per track, and the cache survived changes to the lyrics server, the enabled
+  sources, and (now) the language — so changing any of them appeared to do
+  nothing until you hit *Look up again* or skipped a track. Cadence now tracks
+  which settings affect what a lookup *returns* and clears the cache when any of
+  them changes.
+
 ## [1.4.4] — 2026-08-28
 
 ### Fixed

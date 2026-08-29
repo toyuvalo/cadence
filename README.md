@@ -81,6 +81,15 @@ itself as the song moves.
 - **Lookups only run while the lyrics window is open**, and every result —
   including misses — is cached per track. The feature costs nothing when you're
   not using it.
+- **Clamp lyrics to one language** in Settings → Lyrics → *Lyrics language*.
+  Both databases are community-contributed and matched on loose title/artist
+  text, so a track with no entry in your language can still match one in
+  another. Set this and anything else is refused, with Cadence saying so rather
+  than showing lyrics you can't read. Script detection (Chinese/Japanese/Korean/
+  Cyrillic/Latin) is exact; `english` also weighs English function words against
+  Romance and German markers to separate it from other Latin-script languages —
+  a good heuristic, not a language identifier, so pick `latin` if you listen
+  across European languages. Defaults to `any`.
 
 The panel floats above Cadence but goes behind when you switch apps; flip
 **Float above all apps** in Settings if you want it over everything (second

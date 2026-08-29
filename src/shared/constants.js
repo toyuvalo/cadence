@@ -189,6 +189,13 @@ const DEFAULT_CONFIG = {
     // lyrics came from.
     lyricsSourceLrclib: true,
     lyricsSourceNetease: true,
+    // Language clamp. Lyrics providers are community databases: a track with no
+    // entry in your language can still match an entry in another one, and a
+    // fallback source will hand it over without comment. Set this and anything
+    // that isn't in the chosen language is refused outright — Cadence reports a
+    // miss rather than showing lyrics you can't read.
+    // 'any' | 'english' | 'latin' | 'chinese' | 'japanese' | 'korean' | 'cyrillic'
+    lyricsLanguage: 'any',
   },
   // Auto-update. Cadence checks its own GitHub releases, downloads in the
   // background, and installs on quit — so a running app is never interrupted.

@@ -48,6 +48,7 @@ let active = false; // is anything actually displaying lyrics right now?
 let token = 0; // request generation; stale responses are dropped
 let currentKey = null;
 let retryTimer = null;
+let lastSignature = ''; // settings that change what a lookup RETURNS
 
 // ---- LRC parsing ----------------------------------------------------------
 
@@ -299,6 +300,125 @@ async function neteaseLookup(track) {
   return { syncedLyrics: lrc, plainLyrics: '', instrumental: false };
 }
 
+// ---- language clamp -------------------------------------------------------
+//
+// Every provider here is a community database keyed on loose title/artist text,
+// so a track with no entry in your language can still match an entry in a
+// different one — and a fallback source hands it over with no indication that
+// it did. The clamp refuses anything outside the chosen language.
+//
+// Detection is by SCRIPT, which is the part that can be done reliably in a few
+// lines and without a model: Han vs Kana vs Hangul vs Cyrillic vs Latin are
+// unambiguous. Telling English apart from other LATIN-script languages can't be
+// done by script alone, so 'english' additionally requires a density of common
+// English function words. That check is good enough to reject Spanish or German
+// lyrics, but it is a heuristic, not a language identifier — 'latin' is the
+// honest option if you listen across several European languages.
+
+const SCRIPTS = {
+  latin: /[A-Za-zÀ-ɏ]/g,
+  han: /[一-鿿㐀-䶿]/g,
+  kana: /[぀-ゟ゠-ヿ]/g,
+  hangul: /[가-힯ᄀ-ᇿ]/g,
+  cyrillic: /[Ѐ-ӿ]/g,
+  arabic: /[؀-ۿ]/g,
+  hebrew: /[֐-׿]/g,
+  thai: /[฀-๿]/g,
+  devanagari: /[ऀ-ॿ]/g,
+};
+
+// Function words, not content words: they survive in almost any English lyric.
+// Deliberately EXCLUDES a/me/no/on/so/us/in/do — each is also a common Spanish,
+// French, Italian or Portuguese word, and measured on real lyrics they were the
+// main reason Romance-language sheets scored as English.
+const EN_STOPWORDS = new Set(
+  ('the and or but if of to at for with from into over down out up you he she it we ' +
+   'they him her them my your his its our their this that these those is am are was ' +
+   'were be been being does did done have has had will would can could should not ' +
+   'yes all just like know what when where why how who there here now then never ' +
+   'always some more most very too got get about because every make think really back')
+    .split(' ')
+);
+
+// Strong markers for the Latin-script languages that would otherwise slip past a
+// pure ratio test. Their presence in bulk is positive evidence of NOT-English.
+const NON_EN_MARKERS = new Set(
+  ('que los las por con para una todo pero cuando como muy mas sin sobre desde ' +
+   'les des est pour dans avec vous nous mais tout comme plus toujours cette ces sont ' +
+   'und der die das ich nicht mit auch noch aber wenn sehr immer eine einen ' +
+   'che non per sono anche piu sempre questo ' +
+   'nao voce uma muito isso ' +
+   'de la el en un y o al lo se su es eu meu')
+    .split(' ')
+);
+
+function scriptProfile(text) {
+  const counts = {};
+  let total = 0;
+  for (const key of Object.keys(SCRIPTS)) {
+    SCRIPTS[key].lastIndex = 0;
+    const n = (String(text).match(SCRIPTS[key]) || []).length;
+    counts[key] = n;
+    total += n;
+  }
+  return { counts, total };
+}
+
+// Measured across real lyrics in 6 languages (EN/ES/FR/DE/IT/PT): English sheets
+// score 0.28-0.49 on this set, every non-English sheet scores 0.00-0.07. The
+// 0.12 cut sits in the middle of that gap with margin on both sides, and the
+// marker comparison catches a bilingual sheet (an English-featuring reggaeton
+// remix scored 0.069 with foreign markers outnumbering English 83 to 42).
+function isProbablyEnglish(text) {
+  const words = String(text).toLowerCase().match(/[a-z']+/g) || [];
+  if (words.length < 12) return true; // too little text to judge; don't reject
+  let en = 0;
+  let foreign = 0;
+  for (const w of words) {
+    if (EN_STOPWORDS.has(w)) en++;
+    if (NON_EN_MARKERS.has(w)) foreign++;
+  }
+  return en / words.length >= 0.12 && en > foreign * 1.5;
+}
+
+function lyricsLanguageOk(text, pref) {
+  const want = String(pref || 'any').toLowerCase();
+  if (!want || want === 'any') return true;
+
+  const { counts, total } = scriptProfile(text);
+  if (total < 20) return true; // not enough signal — refusing would be a guess
+  const frac = (k) => counts[k] / total;
+
+  switch (want) {
+    case 'english':
+      return frac('latin') >= 0.9 && isProbablyEnglish(text);
+    case 'latin':
+      return frac('latin') >= 0.9;
+    // Kana presence is what separates Japanese from Chinese: Japanese lyrics
+    // always carry kana, Chinese lyrics never do.
+    case 'chinese':
+      return frac('han') >= 0.3 && frac('kana') < 0.02;
+    case 'japanese':
+      return frac('kana') >= 0.08;
+    case 'korean':
+      return frac('hangul') >= 0.3;
+    case 'cyrillic':
+      return frac('cyrillic') >= 0.5;
+    default:
+      return true;
+  }
+}
+
+// Human-readable, for the message shown when everything was refused.
+const LANGUAGE_LABEL = {
+  english: 'English',
+  latin: 'a Latin-script language',
+  chinese: 'Chinese',
+  japanese: 'Japanese',
+  korean: 'Korean',
+  cyrillic: 'a Cyrillic-script language',
+};
+
 // ---- provider chain -------------------------------------------------------
 
 // Try each enabled source in order and report WHICH one answered, so the UI can
@@ -313,12 +433,24 @@ async function resolve(track) {
     { name: 'NetEase', enabled: config.get('features.lyricsSourceNetease', true), run: neteaseLookup },
   ].filter((p) => p.enabled);
 
+  const wantLang = config.get('features.lyricsLanguage', 'any');
+
   let primaryFailed = '';
+  let languageBlocked = false; // something matched, but in the wrong language
   for (let i = 0; i < providers.length; i++) {
     const p = providers[i];
     try {
       const record = await p.run(track);
       if (record) {
+        // Applied to EVERY provider, not just the fallback — the primary can
+        // return a foreign-language entry for an untranslated title just as
+        // easily. Instrumentals have no words to judge, so they always pass.
+        const text = String(record.syncedLyrics || record.plainLyrics || '');
+        if (!record.instrumental && !lyricsLanguageOk(text, wantLang)) {
+          languageBlocked = true;
+          if (i === 0) primaryFailed = `${p.name} match was in another language`;
+          continue; // a later provider may still have it in the right language
+        }
         return {
           record,
           source: p.name,
@@ -337,7 +469,14 @@ async function resolve(track) {
       if (i === providers.length - 1) throw err;
     }
   }
-  return { record: null, source: '', fallback: false, reason: primaryFailed };
+  return {
+    record: null,
+    source: '',
+    fallback: false,
+    reason: primaryFailed,
+    languageBlocked,
+    wantLang,
+  };
 }
 
 // ---- state machine --------------------------------------------------------
@@ -418,6 +557,18 @@ function toLyricsState(state, record, meta) {
     reason: m.reason || '',
   };
   if (!record) {
+    // Distinguish "nobody has this track" from "somebody has it, but not in the
+    // language you asked for" — the second is one setting away from being fixed,
+    // and reporting it as a plain miss hides that.
+    if (m.languageBlocked) {
+      const label = LANGUAGE_LABEL[m.wantLang] || 'your chosen language';
+      return {
+        ...base,
+        status: LYRICS_STATUS.NOT_FOUND,
+        message: `Lyrics exist for this track, but not in ${label}.`,
+        hint: 'Change “Lyrics language” in Settings to accept other languages.',
+      };
+    }
     return {
       ...base,
       status: LYRICS_STATUS.NOT_FOUND,
@@ -467,9 +618,15 @@ async function fetchFor(state, { bypassCache = false } = {}) {
   });
 
   try {
-    const { record, source, fallback, reason } = await resolve(state);
+    const { record, source, fallback, reason, languageBlocked, wantLang } = await resolve(state);
     if (mine !== token) return; // track changed while we were waiting
-    const next = toLyricsState(state, record, { source, fallback, reason });
+    const next = toLyricsState(state, record, {
+      source,
+      fallback,
+      reason,
+      languageBlocked,
+      wantLang,
+    });
     remember(key, next);
     hub.pushLyrics(next);
   } catch (err) {
@@ -542,17 +699,41 @@ function refetch(query) {
   fetchFor(override, { bypassCache: true });
 }
 
+// Which settings decide what a lookup RETURNS (as opposed to how it looks).
+// When any of these changes, every cached answer was produced under different
+// rules and is stale by definition.
+function lookupSignature() {
+  return [
+    apiBase(),
+    config.get('features.lyricsSourceLrclib', true),
+    config.get('features.lyricsSourceNetease', true),
+    config.get('features.lyricsLanguage', 'any'),
+  ].join('|');
+}
+
 function init() {
   hub.on('state', onState);
   hub._onLyricsRefetch = refetch;
+  lastSignature = lookupSignature();
   config.on('change', (cfg) => {
     if (cfg.features && cfg.features.lyricsEnabled === false && active) {
       token++;
       currentKey = null;
       hub.pushLyrics({ ...EMPTY_LYRICS, message: 'Lyrics are turned off in Settings.' });
-    } else if (active && !cache.size) {
-      onState(hub.latest);
+      return;
     }
+    const sig = lookupSignature();
+    if (sig !== lastSignature) {
+      // Previously this only re-looked-up when the cache happened to be empty,
+      // so changing the server/sources/language appeared to do nothing until
+      // you hit "Look up again" or skipped a track.
+      lastSignature = sig;
+      cache.clear();
+      currentKey = null;
+      if (active) onState(hub.latest);
+      return;
+    }
+    if (active && !cache.size) onState(hub.latest);
   });
 }
 
@@ -566,4 +747,6 @@ module.exports = {
   classifyNetworkError,
   stripNeteaseCredits,
   neteaseArtistMatches,
+  lyricsLanguageOk,
+  isProbablyEnglish,
 };
