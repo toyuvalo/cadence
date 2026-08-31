@@ -1,7 +1,7 @@
 {
   "name": "cadence",
   "productName": "Cadence",
-  "version": "1.4.9",
+  "version": "1.4.10",
   "description": "Cadence — a resilient YouTube Music desktop client that stays up.",
   "author": "DVLCE",
   "license": "MIT",
@@ -22,7 +22,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
-    "electron": "^39.8.10",
+    "electron": "^44.1.0",
     "electron-builder": "^26.15.7",
     "eslint": "^9.39.5",
     "globals": "^17.11.0"
