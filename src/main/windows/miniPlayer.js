@@ -6,6 +6,12 @@ const { hub } = require('../hub');
 
 let winRef = null;
 
+// Sized to the card's content: 82px art/meta + 18px seek row + 54px transport,
+// plus the 12px shadow margin. The window used to be 120px tall while the card
+// alone asked for 132px, so the transport row was clipped off the bottom.
+const MINI_W = 380;
+const MINI_H = 172;
+
 function open() {
   if (winRef && !winRef.isDestroyed()) {
     winRef.show();
@@ -16,9 +22,9 @@ function open() {
   const { width: sw } = display.workAreaSize;
 
   winRef = new BrowserWindow({
-    width: 340,
-    height: 120,
-    x: sw - 360,
+    width: MINI_W,
+    height: MINI_H,
+    x: sw - (MINI_W + 20),
     y: 24,
     frame: false,
     resizable: false,

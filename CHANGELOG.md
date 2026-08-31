@@ -2,6 +2,22 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.8] — 2026-08-31
+
+### Fixed
+- **Mini player's transport row was clipped off the bottom.** The card was a
+  hard `120px` tall plus its own `6px` shadow margin inside a `120px` window,
+  and its content needed ~143px — so Like / Previous / Play-Pause / Next were
+  cut off. The card now fills the window, and the window is sized to the
+  content (380×172).
+
+### Added
+- **Mini player track scrubber** — draggable seek bar with elapsed / total
+  time. Dragging scrubs locally and commits the seek on release, so the ~1/s
+  state ticks no longer fight the drag.
+- **Mini player volume fader** — applies live while dragging, with a mute
+  toggle beside it that reflects the player's muted state.
+
 ## [1.4.7] — 2026-08-31
 
 ### Fixed
