@@ -2,6 +2,21 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.7] — 2026-08-31
+
+### Fixed
+- **Taskbar-thumbnail media buttons vanishing mid-session and never coming
+  back.** Hovering Cadence's taskbar button showed the thumbnail with no
+  Previous / Play-Pause / Next row, so changing track meant opening the window.
+  Windows lets a window ADD a thumbnail toolbar exactly once; every later call
+  only updates the buttons already there. If the first add landed before the
+  taskbar button existed, or Explorer restarted and destroyed the toolbar, the
+  toolbar was gone permanently — re-applying just updated something that no
+  longer existed, so even minimize/restore couldn't recover it. Forced applies
+  now clear the toolbar first (which resets the "already added" state) so the
+  next call performs a real add, and the toolbar is re-added on window focus and
+  on every track change, not only on show/restore and play↔pause flips.
+
 ## [1.4.5] — 2026-08-28
 
 ### Added

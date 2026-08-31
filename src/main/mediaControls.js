@@ -77,12 +77,23 @@ function registerShortcuts() {
 
 let winRef = null;
 let lastKey = null; // 'playing' | 'paused' — skip redundant re-applies
+let lastVideoId = null; // track changes are a cheap, frequent recovery trigger
 
 // (Re)draw the Windows taskbar-thumbnail toolbar: Previous / Play-Pause / Next.
 // These only render once the window actually owns a taskbar button, so calling
 // this while the window is still hidden (show:false, pre-ready-to-show) is a
 // silent no-op — which is exactly why the buttons never used to appear. We apply
 // on show / restore (force) and whenever play↔pause flips.
+//
+// The forced path deliberately clears the toolbar first. Windows' ITaskbarList3
+// can only ADD a thumbnail toolbar to a window once; every later call is an
+// UPDATE of the buttons already there. So if the very first add landed while the
+// taskbar button didn't exist — or Explorer later restarted and destroyed the
+// toolbar — the toolbar is gone for good and no amount of re-applying brings it
+// back: each call just updates a toolbar that isn't there. Passing an empty
+// array resets Electron's "already added" flag, so the next call performs a real
+// add. That is what makes recovery actually work, and it's why the buttons could
+// vanish mid-session on a long-running window and never return.
 function applyThumbar(force) {
   const win = winRef;
   if (!win || win.isDestroyed()) return;
@@ -98,6 +109,7 @@ function applyThumbar(force) {
   if (!force && key === lastKey) return;
 
   try {
+    if (force) win.setThumbarButtons([]); // drop the stale toolbar so the next call re-adds it
     const ok = win.setThumbarButtons([
       { tooltip: 'Previous', icon: set.prev, click: () => { diag('thumbar click: previous'); hub.sendCommand('previous'); } },
       { tooltip: isPlaying ? 'Pause' : 'Play', icon: isPlaying ? set.pause : set.play, click: () => { diag('thumbar click: playPause'); hub.sendCommand('playPause'); } },
@@ -122,12 +134,26 @@ function init(win) {
   win.once('ready-to-show', force);
   win.on('show', force);
   win.on('restore', force);
+  // Explorer can restart (or recreate the taskbar button) at any point in a
+  // multi-hour listening session, taking the toolbar with it and firing none of
+  // the events above. Focus and track changes are the two things that reliably
+  // happen afterwards, so both force a genuine re-add.
+  win.on('focus', force);
   // Windows occasionally drops the thumbar buttons when the taskbar button is
   // recreated; re-assert them a beat after first paint as a belt-and-braces.
   setTimeout(force, 1500);
 
-  // Keep the middle button's icon/tooltip in lockstep with play/pause.
-  hub.on('state', () => applyThumbar(false));
+  // Keep the middle button's icon/tooltip in lockstep with play/pause, and
+  // re-add the whole toolbar whenever the song changes.
+  hub.on('state', () => {
+    const id = (hub.latest || {}).videoId || '';
+    if (id && id !== lastVideoId) {
+      lastVideoId = id;
+      applyThumbar(true);
+      return;
+    }
+    applyThumbar(false);
+  });
   config.on('change', () => registerShortcuts());
 }
 
