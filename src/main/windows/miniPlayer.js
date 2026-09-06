@@ -41,7 +41,7 @@ function open() {
   });
   winRef.setAlwaysOnTop(true, 'screen-saver');
   winRef.loadFile(path.join(__dirname, '..', '..', 'renderer', 'miniplayer', 'miniplayer.html'));
-  hub.registerUI(winRef);
+  hub.registerUI(winRef, ['state']);
   winRef.on('closed', () => {
     winRef = null;
   });

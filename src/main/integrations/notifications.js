@@ -10,12 +10,40 @@ const { APP_NAME } = require('../../shared/constants');
 // no third-party dependency.
 
 let lastNotifiedId = '';
-const artCache = new Map(); // url -> nativeImage
+
+// A Windows toast icon is displayed at roughly 48–64px, so there is no reason
+// to hold the full-size art the preload hands us (it deliberately picks the
+// LARGEST MediaSession artwork, which is commonly 544px or more).
+const ICON_PX = 128;
+const ART_CACHE_MAX = 10;
+
+// LRU, not "first N wins". The previous `artCache.size < 50` guard was both a
+// memory cost and a bug: fifty decoded full-size images are ~50–60 MiB of raw
+// pixels retained for the life of the process, and once the cache filled it
+// stopped admitting anything, so every later track re-downloaded its art
+// forever while the fifty stale entries were never released.
+const artCache = new Map(); // url -> nativeImage (insertion order = LRU order)
+
+function cacheGet(url) {
+  if (!artCache.has(url)) return undefined;
+  const img = artCache.get(url);
+  artCache.delete(url); // re-insert to mark as most recently used
+  artCache.set(url, img);
+  return img;
+}
+
+function cacheSet(url, img) {
+  artCache.set(url, img);
+  while (artCache.size > ART_CACHE_MAX) {
+    artCache.delete(artCache.keys().next().value); // evict least recently used
+  }
+}
 
 function fetchImage(url) {
   return new Promise((resolve) => {
     if (!url) return resolve(null);
-    if (artCache.has(url)) return resolve(artCache.get(url));
+    const hit = cacheGet(url);
+    if (hit !== undefined) return resolve(hit);
     try {
       https
         .get(url, (res) => {
@@ -28,8 +56,12 @@ function fetchImage(url) {
           res.on('end', () => {
             try {
               const img = nativeImage.createFromBuffer(Buffer.concat(chunks));
-              const out = img.isEmpty() ? null : img;
-              if (out && artCache.size < 50) artCache.set(url, out);
+              if (img.isEmpty()) return resolve(null);
+              // Downscale before caching so what we retain is the toast-sized
+              // icon, not the original artwork.
+              const small = img.resize({ width: ICON_PX, height: ICON_PX, quality: 'good' });
+              const out = small.isEmpty() ? img : small;
+              cacheSet(url, out);
               resolve(out);
             } catch {
               resolve(null);

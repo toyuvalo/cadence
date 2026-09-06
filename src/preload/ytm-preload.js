@@ -26,6 +26,8 @@ const IPC = {
   LOG: 'ytm:log',
   COMMAND: 'ytm:command',
   TOGGLE_LYRICS: 'app:toggleLyrics', // handled by hub.js, same as our own windows
+  GET_CONFIG: 'app:getConfig',
+  CONFIG_CHANGED: 'app:configChanged',
 };
 
 const LIKE = { LIKE: 'LIKE', DISLIKE: 'DISLIKE', INDIFFERENT: 'INDIFFERENT' };
@@ -68,6 +70,31 @@ function clickFirst(selectors, label) {
 
 // ---- state extraction -----------------------------------------------------
 
+// Artwork selection is pure work over the same array on every tick, so its
+// result is memoised against the track it was derived from.
+let artCacheKey = '';
+let artCacheUrl = '';
+
+// We used to take the LARGEST artwork. Nothing displays it at that size — the
+// notification toast renders ~48-64px and the mini player ~64px — so it cost
+// bandwidth on every track change and left the main process holding
+// full-resolution decoded bitmaps. Prefer the smallest entry that is still at
+// least ART_TARGET_PX wide, falling back to the largest available.
+const ART_TARGET_PX = 256;
+
+function pickArtwork(artwork) {
+  const sized = artwork.map((a) => ({
+    src: a.src || '',
+    px: parseInt((a.sizes || '0').split('x')[0], 10) || 0,
+  }));
+  const big = sized
+    .filter((a) => a.src && a.px >= ART_TARGET_PX)
+    .sort((a, b) => a.px - b.px)[0];
+  if (big) return big.src;
+  const largest = sized.filter((a) => a.src).sort((a, b) => b.px - a.px)[0];
+  return largest ? largest.src : '';
+}
+
 function readMetadata() {
   const meta =
     navigator.mediaSession && navigator.mediaSession.metadata
@@ -76,13 +103,14 @@ function readMetadata() {
   if (meta && meta.title) {
     let art = '';
     if (meta.artwork && meta.artwork.length) {
-      // Prefer the largest artwork.
-      const sorted = [...meta.artwork].sort((a, b) => {
-        const as = parseInt((a.sizes || '0').split('x')[0], 10) || 0;
-        const bs = parseInt((b.sizes || '0').split('x')[0], 10) || 0;
-        return bs - as;
-      });
-      art = sorted[0].src || '';
+      const key = `${meta.title}|${meta.artist}|${meta.artwork.length}`;
+      if (key === artCacheKey) {
+        art = artCacheUrl;
+      } else {
+        art = pickArtwork([...meta.artwork]);
+        artCacheKey = key;
+        artCacheUrl = art;
+      }
     }
     return {
       title: meta.title || '',
@@ -150,37 +178,84 @@ function isAdShowing() {
   return !!(player && player.classList.contains('ad-showing'));
 }
 
-let adWatcher = null;
-function startAdHandling() {
-  if (adWatcher) return;
-  adWatcher = setInterval(() => {
-    try {
-      // Click any visible "Skip" button.
-      const skip = pick([
-        '.ytp-ad-skip-button',
-        '.ytp-ad-skip-button-modern',
-        '.ytp-skip-ad-button',
-      ]);
-      if (skip) {
-        skip.click();
-        return;
-      }
-      // Unskippable ad: jump to the end + mute so it passes instantly.
-      if (isAdShowing()) {
-        const v = getVideo();
-        if (v && isFinite(v.duration) && v.duration > 0) {
-          v.muted = true;
-          v.currentTime = v.duration;
-          v.playbackRate = 16;
-        }
-      } else {
-        const v = getVideo();
-        if (v && v.playbackRate === 16) v.playbackRate = 1; // restore after ad
-      }
-    } catch {
-      /* never let ad logic throw into YTM */
+// Ad handling used to be a flat 500ms setInterval that ran for the entire
+// session — roughly five DOM queries twice a second, forever, even for a user
+// who never saw an ad. It is now edge-triggered: a narrow attribute observer on
+// the player element notices `ad-showing` appear, and only THEN does a fast
+// poll run, for as long as the ad is on screen.
+let adObserver = null;
+let adPoller = null;
+let adObserverTarget = null;
+
+const AD_POLL_MS = 250; // only ever runs while an ad is actually showing
+
+function handleAdTick() {
+  try {
+    // Click any visible "Skip" button.
+    const skip = pick([
+      '.ytp-ad-skip-button',
+      '.ytp-ad-skip-button-modern',
+      '.ytp-skip-ad-button',
+    ]);
+    if (skip) {
+      skip.click();
+      return;
     }
-  }, 500);
+    // Unskippable ad: jump to the end + mute so it passes instantly.
+    const v = getVideo();
+    if (isAdShowing()) {
+      if (v && isFinite(v.duration) && v.duration > 0) {
+        v.muted = true;
+        v.currentTime = v.duration;
+        v.playbackRate = 16;
+      }
+    } else {
+      if (v && v.playbackRate === 16) v.playbackRate = 1; // restore after ad
+      stopAdPoll();
+    }
+  } catch {
+    /* never let ad logic throw into YTM */
+  }
+}
+
+function startAdPoll() {
+  if (adPoller) return;
+  handleAdTick(); // act on this ad immediately, don't wait a tick
+  if (!adPoller) adPoller = setInterval(handleAdTick, AD_POLL_MS);
+}
+
+function stopAdPoll() {
+  if (!adPoller) return;
+  clearInterval(adPoller);
+  adPoller = null;
+}
+
+// Watch ONLY the player element's class attribute. Deliberately not a
+// document.body/subtree observer: YTM mutates its DOM constantly and a broad
+// observer would cost more than the poll it replaces.
+function attachAdObserver() {
+  const player = pick(['#movie_player', '.html5-video-player']);
+  if (!player || player === adObserverTarget) return;
+  if (adObserver) adObserver.disconnect();
+  adObserverTarget = player;
+  adObserver = new MutationObserver(() => {
+    if (isAdShowing()) startAdPoll();
+  });
+  adObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
+  if (isAdShowing()) startAdPoll(); // an ad may already be running
+}
+
+function startAdHandling() {
+  attachAdObserver();
+}
+
+function stopAdHandling() {
+  stopAdPoll();
+  if (adObserver) {
+    adObserver.disconnect();
+    adObserver = null;
+  }
+  adObserverTarget = null;
 }
 
 const AD_HIDE_CSS = `
@@ -191,10 +266,16 @@ const AD_HIDE_CSS = `
 `;
 
 function injectAdCss() {
+  if (document.getElementById('cadence-ad-hide')) return;
   const style = document.createElement('style');
   style.id = 'cadence-ad-hide';
   style.textContent = AD_HIDE_CSS;
   (document.head || document.documentElement).appendChild(style);
+}
+
+function removeAdCss() {
+  const style = document.getElementById('cadence-ad-hide');
+  if (style && style.parentNode) style.parentNode.removeChild(style);
 }
 
 // ---- lyrics button --------------------------------------------------------
@@ -231,10 +312,33 @@ function playerBarHeight() {
   return h > 20 ? Math.round(h) : 72;
 }
 
+// The button's offset is re-measured only when the player bar actually changes
+// size, not on every heartbeat. Calling getBoundingClientRect() once a second
+// forced a synchronous layout flush of YouTube Music's entire document — the
+// single most expensive thing Cadence did in steady state.
+let barObserver = null;
+let barObserverTarget = null;
+
+function applyButtonOffset(px) {
+  const btn = document.getElementById(LYRICS_BTN_ID);
+  if (btn) btn.style.bottom = px + 18 + 'px';
+}
+
+function attachBarObserver() {
+  const bar = pick(['ytmusic-player-bar', '.ytmusic-player-bar']);
+  if (!bar || bar === barObserverTarget) return;
+  if (barObserver) barObserver.disconnect();
+  barObserverTarget = bar;
+  barObserver = new ResizeObserver((entries) => {
+    const h = entries[0] && entries[0].contentRect ? entries[0].contentRect.height : 0;
+    applyButtonOffset(h > 20 ? Math.round(h) : 72);
+  });
+  barObserver.observe(bar);
+}
+
 function ensureLyricsButton() {
   if (document.getElementById(LYRICS_BTN_ID)) {
-    // Keep it clear of the player bar even when YTM changes its layout.
-    document.getElementById(LYRICS_BTN_ID).style.bottom = playerBarHeight() + 18 + 'px';
+    attachBarObserver(); // re-bind if YTM replaced the player bar on navigation
     return;
   }
   if (!document.body) return;
@@ -274,6 +378,7 @@ function ensureLyricsButton() {
     }
   });
   document.body.appendChild(btn);
+  attachBarObserver();
   log('lyrics button injected');
 }
 
@@ -366,38 +471,122 @@ function attachVideoEvents() {
   const v = getVideo();
   if (!v || v === attachedVideo) return;
   attachedVideo = v;
-  ['play', 'pause', 'loadedmetadata', 'volumechange', 'ratechange', 'ended'].forEach((evt) =>
-    v.addEventListener(evt, pushState)
+  // Push immediately on a real player event, and re-evaluate the heartbeat rate
+  // so play/pause switches between the 1s and 5s cadence without waiting for
+  // the next tick. `seeking`/`seeked` are included so a scrub is reflected at
+  // once rather than up to a beat later.
+  const onEvent = () => {
+    pushState();
+    scheduleBeat();
+  };
+  ['play', 'pause', 'loadedmetadata', 'volumechange', 'ratechange', 'ended', 'seeking', 'seeked'].forEach(
+    (evt) => v.addEventListener(evt, onEvent)
   );
   log('attached to <video>');
   pushState();
 }
 
-function boot() {
-  injectAdCss();
-  startAdHandling();
+// ---- feature config -------------------------------------------------------
+// The preload had no access to config at all, so features.skipDisabledAds and
+// features.hideAds — both real, both surfaced in Settings — did nothing: boot()
+// invoked the ad CSS and the ad watcher unconditionally. Main now pushes config
+// changes to this WebContents (see hub.js) as well as to its own windows.
 
-  ipcRenderer.on(IPC.COMMAND, handleCommand);
+let features = { skipDisabledAds: true, hideAds: true };
 
-  // Heartbeat: re-find the video (survives navigation), keep state fresh, and
-  // act as the "bridge alive" ping the supervisor's watchdog looks for.
-  setInterval(() => {
-    attachVideoEvents();
-    // YTM is a SPA that re-renders whole regions on navigation, so the button
-    // is re-asserted on the same heartbeat that re-finds the <video>.
-    try {
-      ensureLyricsButton();
-    } catch (err) {
-      // Never let our chrome throw into YTM — but never swallow it silently
-      // either: a swallowed Trusted-Types error is exactly how the button went
-      // missing with no trace. Reported once so the log stays readable.
-      if (!btnErrorLogged) {
-        btnErrorLogged = true;
-        log('lyrics button failed: ' + err.message);
-      }
+function applyFeatures(cfg) {
+  const f = (cfg && cfg.features) || {};
+  const next = {
+    skipDisabledAds: f.skipDisabledAds !== false,
+    hideAds: f.hideAds !== false,
+  };
+  if (next.hideAds !== features.hideAds) {
+    if (next.hideAds) injectAdCss();
+    else removeAdCss();
+  }
+  if (next.skipDisabledAds !== features.skipDisabledAds) {
+    if (next.skipDisabledAds) startAdHandling();
+    else stopAdHandling();
+  }
+  features = next;
+}
+
+// ---- heartbeat ------------------------------------------------------------
+// Two jobs: keep currentTime fresh for consumers that cannot derive it, and act
+// as the "bridge alive" ping the supervisor watches for. It no longer re-runs
+// the lyrics-button layout work on every tick, and it backs off hard when there
+// is nothing playing — which is most of the time for a paused or idle window.
+
+const BEAT_PLAYING_MS = 1000;
+const BEAT_IDLE_MS = 5000;
+const SENTINEL_EVERY_MS = 10000; // re-assert our own chrome, rarely
+
+let beatTimer = null;
+let beatPeriod = 0;
+let lastSentinel = 0;
+
+function sentinel() {
+  // YTM is a SPA that re-renders whole regions on navigation, so the button and
+  // the observers are re-asserted periodically rather than every second.
+  try {
+    ensureLyricsButton();
+    if (features.skipDisabledAds) attachAdObserver();
+  } catch (err) {
+    // Never let our chrome throw into YTM — but never swallow it silently
+    // either: a swallowed Trusted-Types error is exactly how the button went
+    // missing with no trace. Reported once so the log stays readable.
+    if (!btnErrorLogged) {
+      btnErrorLogged = true;
+      log('lyrics button failed: ' + err.message);
     }
-    pushState();
-  }, 1000);
+  }
+}
+
+function beat() {
+  attachVideoEvents();
+  const now = Date.now();
+  if (now - lastSentinel >= SENTINEL_EVERY_MS) {
+    lastSentinel = now;
+    sentinel();
+  }
+  pushState();
+  scheduleBeat();
+}
+
+function scheduleBeat() {
+  const v = getVideo();
+  const playing = !!(v && !v.paused);
+  const period = playing ? BEAT_PLAYING_MS : BEAT_IDLE_MS;
+  if (beatTimer && period === beatPeriod) return; // already ticking at the right rate
+  if (beatTimer) clearTimeout(beatTimer);
+  beatPeriod = period;
+  beatTimer = setTimeout(beat, period);
+}
+
+function boot() {
+  ipcRenderer.on(IPC.COMMAND, handleCommand);
+  ipcRenderer.on(IPC.CONFIG_CHANGED, (_e, cfg) => applyFeatures(cfg));
+
+  // Start from the persisted config rather than assuming both ad features are
+  // on. Falls back to the defaults if the handler is somehow unavailable.
+  ipcRenderer
+    .invoke(IPC.GET_CONFIG)
+    .then((cfg) => {
+      const f = (cfg && cfg.features) || {};
+      if (f.hideAds !== false) injectAdCss();
+      if (f.skipDisabledAds !== false) startAdHandling();
+      features = {
+        skipDisabledAds: f.skipDisabledAds !== false,
+        hideAds: f.hideAds !== false,
+      };
+    })
+    .catch(() => {
+      injectAdCss();
+      startAdHandling();
+    });
+
+  sentinel();
+  scheduleBeat();
 
   ipcRenderer.send(IPC.READY, { url: location.href });
   log('bridge ready on ' + location.href);

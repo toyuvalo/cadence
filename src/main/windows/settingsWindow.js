@@ -29,7 +29,7 @@ function open() {
   });
   winRef.removeMenu();
   winRef.loadFile(path.join(__dirname, '..', '..', 'renderer', 'settings', 'settings.html'));
-  hub.registerUI(winRef);
+  hub.registerUI(winRef, ['config', 'update']);
   winRef.on('closed', () => {
     winRef = null;
   });

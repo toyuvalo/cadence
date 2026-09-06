@@ -81,8 +81,34 @@ function buildMenu(state) {
   ]);
 }
 
+// Nothing in the tray shows playback POSITION, so the only things that can
+// change its contents are the track, the play/pause state and the updater's
+// status line. Rebuilding regardless meant `Menu.buildFromTemplate` allocated a
+// fresh 14-item native menu — and handed it to the OS via setContextMenu — once
+// every second for the entire session, all of it identical to the last one.
+let lastMenuKey = null;
+
+function menuKey(state) {
+  const s = state || {};
+  const u = hub._update.getState();
+  return [
+    s.hasSong ? '1' : '0',
+    s.isPaused ? 'p' : 'r',
+    s.videoId || '',
+    s.title || '',
+    s.artist || '',
+    u.status || '',
+    u.version || '',
+    u.percent || 0,
+  ].join('|');
+}
+
 function update(state) {
   if (!tray) return;
+  const key = menuKey(state);
+  if (key === lastMenuKey) return;
+  lastMenuKey = key;
+
   const tip = state && state.hasSong
     ? `${APP_NAME} — ${truncate(state.title, 50)}`
     : `${APP_NAME}`;

@@ -115,7 +115,43 @@
       };
       const setPct = (el, pct) => el.style.setProperty('--pct', Math.max(0, Math.min(100, pct)) + '%');
 
+      // The main window's music view is background-throttled now, so when
+      // Cadence is minimised into this mini player the state pushes behind it
+      // can slow right down. Progress is therefore extrapolated locally from
+      // the last snapshot rather than trusting a push to arrive every second —
+      // same process clock on both sides, so `ts` is directly comparable.
+      let last = null;
+
+      function playhead() {
+        if (!last || !last.hasSong) return 0;
+        const base = last.currentTime || 0;
+        if (last.isPaused) return base;
+        const drift = (Date.now() - (last.ts || Date.now())) / 1000;
+        const t = base + Math.max(0, drift);
+        return last.duration ? Math.min(t, last.duration) : t;
+      }
+
+      function paintProgress() {
+        if (seeking || !last) return;
+        const t = playhead();
+        const pct = duration ? Math.min(100, (t / duration) * 100) : 0;
+        $('seek').value = Math.round(pct * 10);
+        setPct($('seek'), pct);
+        $('elapsed').textContent = fmt(t);
+      }
+
+      // One cheap timer, and only while something is actually playing and the
+      // window is being composited.
+      let progressTimer = null;
+      function syncProgressTimer() {
+        const running = !!(last && last.hasSong && !last.isPaused) && !document.hidden;
+        if (running && !progressTimer) progressTimer = setInterval(paintProgress, 500);
+        else if (!running && progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+      }
+      document.addEventListener('visibilitychange', syncProgressTimer);
+
       function paint(s) {
+        last = s;
         $('title').textContent = s.hasSong ? (s.title || 'Unknown') : 'Nothing playing';
         $('artist').textContent = s.hasSong ? (s.artist || '') : '—';
         if (s.artworkUrl && $('art').src !== s.artworkUrl) $('art').src = s.artworkUrl;
@@ -124,12 +160,8 @@
 
         duration = s.duration || 0;
         $('total').textContent = fmt(duration);
-        if (!seeking) {
-          const pct = duration ? Math.min(100, (s.currentTime / duration) * 100) : 0;
-          $('seek').value = Math.round(pct * 10);
-          setPct($('seek'), pct);
-          $('elapsed').textContent = fmt(s.currentTime);
-        }
+        paintProgress();
+        syncProgressTimer();
 
         const muted = !!s.muted || s.volume === 0;
         $('volIcon').innerHTML = muted ? ICON_MUTED : ICON_VOL;

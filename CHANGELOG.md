@@ -2,6 +2,76 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.11] — 2026-09-04
+
+Steady-state CPU and memory work. Cadence's own overhead was mostly a set of
+timers that ran at a fixed rate forever — playing or not, visible or not.
+Measured after these changes: **0.1% mean total CPU across all 8 processes
+while idle** (`CADENCE_METRICS=1`, 60s, nothing playing). Playback CPU is
+dominated by Chromium's audio/video decode and YouTube Music's own page, and
+is not something a wrapper can remove.
+
+### Fixed
+- **`features.skipDisabledAds` and `features.hideAds` did nothing.** Both
+  settings existed and were surfaced in Settings, but the preload had no access
+  to config at all — the ad CSS and the ad watcher were installed
+  unconditionally at boot. Config now reaches the music bridge, and both
+  toggles apply live.
+- **Album-art cache retained ~50-60 MiB and then stopped working.** The guard
+  was `artCache.size < 50`, i.e. first-fifty-wins rather than an LRU: fifty
+  full-size decoded images were held for the life of the process, and once full
+  the cache admitted nothing, so every later track re-downloaded its art
+  forever. Now a 10-entry LRU of 128px icons.
+- **Dragging a window re-registered every global shortcut, dozens of times per
+  second.** `move`/`resize` persisted bounds through `config.set()`, which
+  wrote the whole config to disk *and* emitted a global `change` — and
+  `mediaControls` responds to that by calling `globalShortcut.unregisterAll()`
+  and re-registering everything. A media key pressed mid-drag could land in the
+  gap. Internal state now uses a debounced, silent `config.setState()`.
+- **Last.fm lost listen time whenever Cadence was in the background.** Play
+  time was accumulated from the wall clock with anything over 10s discarded as
+  a sleep burst; with the music view throttled again, ordinary background gaps
+  exceed that. It now accumulates from the media clock, clamped to the wall gap
+  so a forward seek is not counted as listening.
+
+### Changed
+- **The music view is background-throttled again** (`backgroundThrottling` back
+  to Chromium's default). It was disabled to "keep audio alive when minimized",
+  but Chromium already exempts audio-playing pages from throttling, so the flag
+  bought nothing during playback while keeping the entire YouTube Music page at
+  full rate whenever Cadence was hidden, minimized or paused. The supervisor
+  now skips its bridge-silence check while the window is hidden (a throttled
+  heartbeat is not a dead one) and the mini player extrapolates its own
+  progress, so nothing depends on the old behaviour.
+- **The 1s heartbeat no longer forces a layout of the YouTube Music page.** It
+  called `getBoundingClientRect()` on the player bar every tick to reposition
+  the Lyrics button — a synchronous layout flush of YTM's whole document, once
+  a second, forever. A `ResizeObserver` now does it only when the bar actually
+  changes size. The heartbeat also backs off from 1s to 5s when nothing is
+  playing, and re-asserts our injected chrome every 10s instead of every tick.
+- **Ad handling is edge-triggered instead of polled.** It was a flat 500ms
+  interval doing ~5 DOM queries for the whole session, for every user, whether
+  or not an ad ever appeared. A narrow attribute observer on the player element
+  now starts a short 250ms poll only while an ad is on screen.
+- **The lyrics panel no longer runs a permanent `requestAnimationFrame`
+  loop.** It re-armed itself before checking whether there was anything to do,
+  so it ran at 60-144Hz for the window's entire lifetime — no song, unsynced
+  lyrics, paused, or hidden behind another app. It now sleeps until the next
+  lyric's timestamp and stops entirely when there is nothing to advance.
+- **The tray menu is rebuilt only when its contents change.** Every state tick
+  allocated a fresh 14-item native menu and handed it to the OS once a second,
+  always identical to the last one; the tray shows no playback position.
+- **Player state is only sent to windows that consume it.** The shell renderer
+  reads supervisor and update status only, but was receiving a full clone of
+  the player state every second.
+- Artwork requested from MediaSession is now the smallest entry ≥256px rather
+  than the largest — nothing displays it above ~128px.
+
+### Added
+- **`CADENCE_METRICS=1`** — opt-in per-process CPU/memory sampler writing
+  `<tmp>/cadence-metrics.csv`, so performance claims can be checked rather than
+  asserted. Set `CADENCE_METRICS_LABEL` to tag a run for A/B comparison.
+
 ## [1.4.8] — 2026-08-31
 
 ### Fixed

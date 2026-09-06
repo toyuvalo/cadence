@@ -63,7 +63,7 @@ class Hub extends EventEmitter {
     this.latestLyrics = { ...EMPTY_LYRICS };
     this._getYtmWC = null;
     this._supervisor = null;
-    this._uiWindows = new Set(); // BrowserWindow refs hosting our own pages
+    this._uiWindows = new Map(); // BrowserWindow -> Set of subscribed feed names
     this._lastStatus = { status: 'starting', detail: '' };
     this._onOpenSettings = () => {};
     this._onToggleMini = () => {};
@@ -84,14 +84,19 @@ class Hub extends EventEmitter {
     if (onToggleLyrics) this._onToggleLyrics = onToggleLyrics;
   }
 
-  registerUI(win) {
-    this._uiWindows.add(win);
+  // `interests` names the feeds this window actually consumes. Without it every
+  // window received every push — the shell renderer, which only ever reads
+  // supervisor/update status, was being handed a full structured-clone of the
+  // player state once a second for nothing.
+  registerUI(win, interests) {
+    const want = new Set(interests || ['state', 'status', 'lyrics', 'config', 'update']);
+    this._uiWindows.set(win, want);
     win.on('closed', () => this._uiWindows.delete(win));
-    // Prime the new window with current data.
+    // Prime the new window with the current data it cares about.
     if (!win.webContents.isDestroyed()) {
-      win.webContents.send(CH.STATE_PUSH, this.latest);
-      win.webContents.send(CH.SUPERVISOR_STATUS, this._lastStatus);
-      win.webContents.send(CH.LYRICS_PUSH, this.latestLyrics);
+      if (want.has('state')) win.webContents.send(CH.STATE_PUSH, this.latest);
+      if (want.has('status')) win.webContents.send(CH.SUPERVISOR_STATUS, this._lastStatus);
+      if (want.has('lyrics')) win.webContents.send(CH.LYRICS_PUSH, this.latestLyrics);
     }
   }
 
@@ -116,8 +121,9 @@ class Hub extends EventEmitter {
     wc.send(CH.COMMAND, { action, value });
   }
 
-  _broadcast(channel, payload) {
-    for (const win of this._uiWindows) {
+  _broadcast(channel, payload, feed) {
+    for (const [win, want] of this._uiWindows) {
+      if (feed && !want.has(feed)) continue;
       if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
         win.webContents.send(channel, payload);
       }
@@ -128,19 +134,19 @@ class Hub extends EventEmitter {
   // of our windows, and remember it so a window opened later is primed with it.
   pushLyrics(payload) {
     this.latestLyrics = payload;
-    this._broadcast(CH.LYRICS_PUSH, payload);
+    this._broadcast(CH.LYRICS_PUSH, payload, 'lyrics');
     this.emit('lyrics', payload);
   }
 
   // Fan out updater progress (checking / downloading / ready) to our windows.
   pushUpdateStatus(payload) {
-    this._broadcast(CH.UPDATE_STATUS, payload);
+    this._broadcast(CH.UPDATE_STATUS, payload, 'update');
     this.emit('update', payload);
   }
 
   pushSupervisorStatus(status, detail) {
     this._lastStatus = { status, detail: detail || '' };
-    this._broadcast(CH.SUPERVISOR_STATUS, this._lastStatus);
+    this._broadcast(CH.SUPERVISOR_STATUS, this._lastStatus, 'status');
     this.emit('status', this._lastStatus);
   }
 
@@ -148,11 +154,12 @@ class Hub extends EventEmitter {
     const prev = this.latest;
     this.latest = state;
     if (this._supervisor) this._supervisor.noteAlive();
-    // Persist volume + last url-ish bits opportunistically.
+    // Persist volume opportunistically — silently and debounced. A volume drag
+    // used to fire a full config write plus a global 'change' cascade per step.
     if (typeof state.volume === 'number' && state.volume !== prev.volume) {
-      config.set('state.volume', state.volume);
+      config.setState('state.volume', state.volume);
     }
-    this._broadcast(CH.STATE_PUSH, state);
+    this._broadcast(CH.STATE_PUSH, state, 'state');
     this.emit('state', state, prev);
   }
 
@@ -188,7 +195,12 @@ class Hub extends EventEmitter {
     });
     ipcMain.handle(CH.SET_CONFIG, (_e, patch) => {
       const next = config.set(patch);
-      this._broadcast(CH.CONFIG_CHANGED, next);
+      this._broadcast(CH.CONFIG_CHANGED, next, 'config');
+      // The music bridge needs this too: features.skipDisabledAds /
+      // features.hideAds are enforced inside ytm-preload.js, and it is not one
+      // of our own UI windows, so it never saw a config change.
+      const wc = this._getYtmWC && this._getYtmWC();
+      if (wc && !wc.isDestroyed()) wc.send(CH.CONFIG_CHANGED, next);
       this.emit('config', next);
       return next;
     });

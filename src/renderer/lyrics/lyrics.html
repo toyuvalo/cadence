@@ -303,8 +303,49 @@
         $('lines').style.transform = `translateY(${-Math.max(0, y)}px)`;
       }
 
+      // ---- scheduler ------------------------------------------------------
+      // This used to be a self-perpetuating requestAnimationFrame loop that
+      // re-armed itself BEFORE checking whether there was anything to do, so it
+      // ran at the display refresh rate (60-144Hz) for the entire life of the
+      // window — with no song, with unsynced lyrics, while paused, and even
+      // while the panel was hidden behind another app, because the window also
+      // disabled background throttling.
+      //
+      // Nothing here needs per-frame resolution: the highlight changes only
+      // when the playhead crosses the next lyric's timestamp, and the 450ms
+      // scroll itself is a CSS transition. So we sleep until precisely that
+      // moment (with a coarse resync ceiling to absorb drift and seeks) and
+      // stop entirely whenever there is nothing to advance.
+      const RESYNC_MAX_MS = 1000;
+      const RESYNC_MIN_MS = 40;
+      let tickTimer = null;
+
+      function stopTicking() {
+        if (tickTimer) { clearTimeout(tickTimer); tickTimer = null; }
+      }
+
+      function scheduleTick() {
+        stopTicking();
+        if (document.hidden) return;
+        if (!lyrics || !lyrics.synced || !nodes.length) return;
+        if (!state || !state.hasSong || state.isPaused) return;
+
+        // Sleep until the next lyric line is due, capped so a seek or clock
+        // drift is still picked up promptly.
+        const now = playhead() - offsetSec();
+        const next = lyrics.lines[activeIdx + 1];
+        const untilMs = next ? (next.time - now) * 1000 : RESYNC_MAX_MS;
+        const delay = Math.max(RESYNC_MIN_MS, Math.min(RESYNC_MAX_MS, untilMs));
+        tickTimer = setTimeout(tick, delay);
+      }
+
       function tick() {
-        requestAnimationFrame(tick);
+        tickTimer = null;
+        paint();
+        scheduleTick();
+      }
+
+      function paint() {
         if (!lyrics || !lyrics.synced || !nodes.length) return;
         const idx = indexAt(playhead() - offsetSec());
         if (idx === activeIdx) return;
@@ -380,15 +421,30 @@
       }
 
       // ---- wiring ---------------------------------------------------------
-      C.onState((s) => { state = s; paintHeader(); if (!lyrics || !lyrics.lines.length) paintStatus(); });
+      C.onState((s) => {
+        state = s;
+        paintHeader();
+        if (!lyrics || !lyrics.lines.length) paintStatus();
+        // Play/pause/seek all arrive here; re-align the highlight and re-arm.
+        paint();
+        scheduleTick();
+      });
       C.onLyrics((l) => {
         lyrics = l;
         const s = sig(l);
         if (s !== rendered) { rendered = s; build(); }
         paintStatus();
         paintSource();
+        paint();
+        scheduleTick();
       });
-      C.onConfigChanged((c) => { cfg = c; applyCfg(); });
+      C.onConfigChanged((c) => { cfg = c; applyCfg(); scheduleTick(); });
+
+      // Stop the clock entirely while the panel is not being composited.
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopTicking();
+        else { paint(); scheduleTick(); }
+      });
 
       $('close').onclick = () => C.toggleLyrics();
       $('refetch').onclick = () => C.refetchLyrics();
@@ -444,8 +500,8 @@
       Promise.all([C.getState(), C.getConfig(), C.getLyrics()]).then(([s, c, l]) => {
         state = s; cfg = c; lyrics = l;
         applyCfg(); paintHeader(); rendered = sig(l); build(); paintStatus(); paintSource();
+        paint(); scheduleTick();
       });
-      requestAnimationFrame(tick);
     </script>
   </body>
 </html>

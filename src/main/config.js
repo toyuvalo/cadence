@@ -4,6 +4,10 @@ const Store = require('electron-store');
 const { EventEmitter } = require('events');
 const { DEFAULT_CONFIG } = require('../shared/constants');
 
+// Window drags and volume scrubs produce a burst of state writes; coalesce them
+// into one disk write instead of one per event.
+const PERSIST_DEBOUNCE_MS = 400;
+
 // Deep-merge helper so a partial/old on-disk config always resolves against the
 // current default schema. Never mutates inputs.
 function deepMerge(base, override) {
@@ -97,6 +101,7 @@ class Config extends EventEmitter {
       this._store = null;
       raw = {};
     }
+    this._persistTimer = null;
     this._data = runMigrations(deepMerge(DEFAULT_CONFIG, raw));
     this._persist();
   }
@@ -110,16 +115,57 @@ class Config extends EventEmitter {
     return v === undefined ? fallback : v;
   }
 
-  // Accepts either set('a.b', value) or set({ a: { b: value } }) for batch.
-  set(dottedOrObject, value) {
+  _apply(dottedOrObject, value) {
     if (typeof dottedOrObject === 'string') {
       setPath(this._data, dottedOrObject, value);
     } else if (dottedOrObject && typeof dottedOrObject === 'object') {
       this._data = deepMerge(this._data, dottedOrObject);
     }
-    this._persist();
+  }
+
+  // A real SETTINGS change: persist now and tell the whole app. Accepts either
+  // set('a.b', value) or set({ a: { b: value } }) for batch.
+  set(dottedOrObject, value) {
+    this._apply(dottedOrObject, value);
+    this.flush();
     this.emit('change', this._data);
     return this._data;
+  }
+
+  // Internal STATE (window bounds, volume, last URL) — persisted, but silent.
+  //
+  // These used to go through set(), which was a genuine performance bug: a
+  // window drag fires 'move'/'resize' dozens of times a second, and every one
+  // wrote the entire config to disk AND emitted 'change'. Every 'change'
+  // listener then ran — including mediaControls, which does
+  // globalShortcut.unregisterAll() and re-registers every accelerator. So
+  // dragging a window tore down and rebuilt the global media-key bindings
+  // dozens of times per second, which is also why a media key pressed mid-drag
+  // could go nowhere. State writes are debounced and emit nothing.
+  setState(dottedOrObject, value) {
+    this._apply(dottedOrObject, value);
+    this._schedulePersist();
+    return this._data;
+  }
+
+  _schedulePersist() {
+    if (this._persistTimer) return;
+    this._persistTimer = setTimeout(() => {
+      this._persistTimer = null;
+      this._persist();
+    }, PERSIST_DEBOUNCE_MS);
+    // Never hold the event loop open on a pending settings write.
+    if (this._persistTimer.unref) this._persistTimer.unref();
+  }
+
+  // Write any debounced state immediately (called on quit so the last drag or
+  // volume nudge is never lost).
+  flush() {
+    if (this._persistTimer) {
+      clearTimeout(this._persistTimer);
+      this._persistTimer = null;
+    }
+    this._persist();
   }
 
   _persist() {

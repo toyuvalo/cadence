@@ -12,9 +12,10 @@ const config = require('./config');
 // with exponential backoff, restoring the last track + position, and surfaces a
 // "Reconnecting…" overlay instead of a dead window.
 class Supervisor extends EventEmitter {
-  constructor({ getWebContents, onStatus, onReloaded }) {
+  constructor({ getWebContents, onStatus, onReloaded, getHostWindow }) {
     super();
     this._getWC = getWebContents;
+    this._getHostWindow = getHostWindow || (() => null);
     this._onStatus = onStatus || (() => {});
     this._onReloaded = onReloaded || (() => {});
     this._attempts = 0;
@@ -40,6 +41,18 @@ class Supervisor extends EventEmitter {
   _wc() {
     const wc = this._getWC();
     return wc && !wc.isDestroyed() ? wc : null;
+  }
+
+  // True when the music view's timers are expected to be throttled by Chromium,
+  // so a quiet bridge is normal rather than evidence of a detached hook.
+  _isBackgrounded() {
+    try {
+      const win = this._getHostWindow();
+      if (!win || win.isDestroyed()) return false;
+      return win.isMinimized() || !win.isVisible();
+    } catch {
+      return false; // if we cannot tell, prefer the old (recovering) behaviour
+    }
   }
 
   _attach() {
@@ -185,6 +198,15 @@ class Supervisor extends EventEmitter {
       // 3) Detached-hook check: the bridge pings state while a song is loaded.
       // If we had a good load but have heard nothing from the bridge for a long
       // time AND the page should be interactive, treat the hook as detached.
+      //
+      // Skipped while the host window is hidden or minimized. Now that the YTM
+      // view is background-throttled again (see mainWindow.js), a backgrounded
+      // renderer's timers legitimately drop to roughly once a minute, which is
+      // longer than this threshold — without this guard the watchdog would read
+      // normal throttling as a dead bridge and reload the page underneath a
+      // user who had simply minimized Cadence.
+      if (this._isBackgrounded()) return;
+
       const sinceGood = Date.now() - this._lastGoodLoad;
       const sincePing = Date.now() - this._lastStatePing;
       if (this._lastGoodLoad && sinceGood > interval * 2 && sincePing > interval * 4) {

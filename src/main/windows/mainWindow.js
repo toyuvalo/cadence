@@ -103,7 +103,22 @@ function create() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      backgroundThrottling: false, // keep audio/state alive when minimized
+      // backgroundThrottling is left at Chromium's default (true) on purpose.
+      //
+      // It used to be false, on the theory that it "keeps audio/state alive
+      // when minimized". That premise is wrong: Chromium already exempts a page
+      // that is PLAYING AUDIO from background timer throttling and from
+      // renderer backgrounding, so the flag bought nothing during playback —
+      // while costing full-rate JS for the whole YouTube Music page (its own
+      // timers, its rAF, our heartbeat) whenever the window was hidden,
+      // minimized, occluded, or simply paused. Electron also documents that one
+      // unthrottled WebContents forces frames to be drawn and swapped for the
+      // entire host window, so it was dragging the shell renderer along too.
+      //
+      // Two things depend on this being throttled again, and both are handled:
+      // supervisor.js skips its bridge-silence check while the window is
+      // hidden/minimized (a throttled heartbeat is not a dead one), and the
+      // mini player extrapolates its own progress locally.
     },
   });
   win.contentView.addChildView(ytmView);
@@ -162,11 +177,20 @@ function create() {
   win.on('enter-full-screen', layoutView);
   win.on('leave-full-screen', layoutView);
 
+  // 'move'/'resize' fire continuously during a drag. Coalesce them into one
+  // silent state write (config.setState debounces the disk hit and emits no
+  // 'change', so this no longer re-registers every global shortcut per frame).
+  let boundsTimer = null;
   const saveBounds = () => {
-    if (!win || win.isDestroyed() || win.isMinimized()) return;
-    const b = win.getBounds();
-    config.set('state.windowBounds', b);
-    config.set('state.maximized', win.isMaximized());
+    if (boundsTimer) return;
+    boundsTimer = setTimeout(() => {
+      boundsTimer = null;
+      if (!win || win.isDestroyed() || win.isMinimized()) return;
+      config.setState({
+        state: { windowBounds: win.getBounds(), maximized: win.isMaximized() },
+      });
+    }, 400);
+    if (boundsTimer.unref) boundsTimer.unref();
   };
   win.on('resize', saveBounds);
   win.on('move', saveBounds);

@@ -45,7 +45,11 @@ function open() {
       preload: path.join(__dirname, '..', '..', 'preload', 'app-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: false, // keep the karaoke scroll smooth when unfocused
+      // Default (throttled). Chromium does not throttle a VISIBLE window just
+      // because it is unfocused, so the karaoke scroll stays smooth exactly
+      // when you can see it; throttling only kicks in when the panel is
+      // occluded or minimized, where a 60fps scroll is wasted work. The lyrics
+      // renderer also no longer runs a permanent rAF loop.
     },
   });
 
@@ -53,14 +57,21 @@ function open() {
   if (floatOverEverything) winRef.setAlwaysOnTop(true, 'screen-saver');
   winRef.removeMenu();
   winRef.loadFile(path.join(__dirname, '..', '..', 'renderer', 'lyrics', 'lyrics.html'));
-  hub.registerUI(winRef);
+  hub.registerUI(winRef, ['state', 'lyrics', 'config']);
 
   // Lookups only run while this window exists — no background API traffic.
   lyrics.setActive(true);
 
+  // Debounced + silent, for the same reason as the main window's bounds.
+  let boundsTimer = null;
   const saveBounds = () => {
-    if (!winRef || winRef.isDestroyed() || winRef.isMinimized()) return;
-    config.set('state.lyricsBounds', winRef.getBounds());
+    if (boundsTimer) return;
+    boundsTimer = setTimeout(() => {
+      boundsTimer = null;
+      if (!winRef || winRef.isDestroyed() || winRef.isMinimized()) return;
+      config.setState('state.lyricsBounds', winRef.getBounds());
+    }, 400);
+    if (boundsTimer.unref) boundsTimer.unref();
   };
   winRef.on('resize', saveBounds);
   winRef.on('move', saveBounds);

@@ -147,9 +147,18 @@ function onState(state, prev) {
   if (!isEnabled()) return;
   const now = Date.now();
 
-  // Count the gap since the last ping as listen time only if we were actively
-  // playing the same track then (not paused, not an ad). The 10s clamp absorbs
-  // sleep/startup bursts.
+  // Accumulate listen time from the MEDIA clock, not the wall clock.
+  //
+  // This previously added the wall-clock gap since the last ping, discarding
+  // anything over 10s as a sleep/startup burst. That was safe only while state
+  // arrived every second unconditionally. Now that the music view is
+  // background-throttled and the heartbeat backs off when paused, a legitimate
+  // gap can easily exceed 10s while minimised — under the old rule every one of
+  // those seconds was thrown away, so a track played entirely in the background
+  // would never reach its scrobble threshold.
+  //
+  // state.currentTime is authoritative and immune to both. It is clamped to the
+  // wall gap (+1s of slack) so a forward SEEK cannot be counted as listening.
   if (
     currentTrack &&
     prev &&
@@ -158,8 +167,9 @@ function onState(state, prev) {
     !prev.adShowing &&
     prev.videoId === currentTrack.videoId
   ) {
-    const elapsed = (now - lastPingWallMs) / 1000;
-    if (elapsed > 0 && elapsed < 10) playedSeconds += elapsed;
+    const dMedia = (state.currentTime || 0) - (prev.currentTime || 0);
+    const dWall = (now - lastPingWallMs) / 1000;
+    if (dMedia > 0 && dWall > 0) playedSeconds += Math.min(dMedia, dWall + 1);
   }
   lastPingWallMs = now;
 

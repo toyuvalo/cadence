@@ -17,6 +17,7 @@ const lyrics = require('./integrations/lyrics');
 const notifications = require('./integrations/notifications');
 const discord = require('./integrations/discord');
 const lastfm = require('./integrations/lastfm');
+const metrics = require('./metrics');
 const { APP_NAME, APP_VERSION } = require('../shared/constants');
 
 // --- single instance --------------------------------------------------------
@@ -54,6 +55,7 @@ function bootstrap() {
 
     const supervisor = new Supervisor({
       getWebContents: () => mainWindow.getYtmWebContents(),
+      getHostWindow: () => mainWindow.getWindow(),
       onStatus: (status, detail) => hub.pushSupervisorStatus(status, detail),
       onReloaded: () => {
         mainWindow.setYtmVisible(true);
@@ -61,7 +63,7 @@ function bootstrap() {
         const wc = mainWindow.getYtmWebContents();
         if (wc && !wc.isDestroyed()) {
           try {
-            config.set('state.lastUrl', wc.getURL());
+            config.setState('state.lastUrl', wc.getURL());
           } catch { /* best-effort resume hint; a write failure must not block startup */ }
         }
       },
@@ -82,8 +84,9 @@ function bootstrap() {
       onToggleLyrics: () => lyricsWindow.toggle(),
     });
 
-    // Register our own host window + integrations as state consumers.
-    hub.registerUI(win);
+    // The shell renderer draws the toolbar + recovery overlay only; it reads
+    // supervisor status and the update pill, never player state.
+    hub.registerUI(win, ['status', 'update']);
 
     tray.create();
     mediaControls.init(win);
@@ -92,6 +95,7 @@ function bootstrap() {
     notifications.init();
     discord.init();
     lastfm.init();
+    metrics.init(); // no-op unless CADENCE_METRICS=1
 
     // --- the audio-service crash that bricked YTMDesktop --------------------
     // Electron surfaces it as an app-level child-process-gone for the Utility
@@ -151,6 +155,9 @@ function bootstrap() {
 
   app.on('before-quit', () => {
     app.isQuitting = true;
+    // Window bounds / volume are persisted on a debounce; make sure the last
+    // one isn't lost on the way out.
+    config.flush();
   });
 
   app.on('will-quit', () => {
