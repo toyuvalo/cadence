@@ -18,6 +18,7 @@ const notifications = require('./integrations/notifications');
 const discord = require('./integrations/discord');
 const lastfm = require('./integrations/lastfm');
 const metrics = require('./metrics');
+const log = require('./log');
 const { APP_NAME, APP_VERSION } = require('../shared/constants');
 
 // --- single instance --------------------------------------------------------
@@ -44,6 +45,7 @@ app.commandLine.appendSwitch('disable-features', 'HardwareMediaKeyHandling');
 // built-in handler can't fight us for MediaPlayPause.
 
 function bootstrap() {
+  log.init();
   app.setAppUserModelId('ca.dvlce.cadence'); // correct Windows toast/grouping
   app.name = APP_NAME;
 

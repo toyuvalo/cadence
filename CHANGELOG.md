@@ -2,6 +2,23 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.13] — 2026-09-16
+
+### Fixed
+- **Lyrics, settings, mini-player and the recovery overlay had no working
+  bridge since 1.4.4.** `app-preload.js` required `../shared/constants`, but
+  Cadence's own windows run sandboxed (Electron's default) and a sandboxed
+  preload cannot require other files — the preload died with "module not
+  found" before `contextBridge` ran, so `window.cadence` was undefined and
+  `lyrics.html` threw on its first `onState` call ("Looking for lyrics…"
+  forever). The two constants are now inlined, as `ytm-preload.js` already did.
+
+### Added
+- **Persistent main-process log** at `<userData>/logs/main.log` (mirrors
+  console output, capped at 1 MB with one rotation) and **native crash dumps**
+  via `crashReporter` (local only, never uploaded). Until now a silent exit of
+  the packaged app left nothing on disk to diagnose from.
+
 ## [1.4.12] — 2026-09-16
 
 ### Fixed

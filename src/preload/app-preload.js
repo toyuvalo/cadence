@@ -4,7 +4,15 @@
 // Exposes a minimal, audited surface over contextBridge — no Node in the page.
 
 const { contextBridge, ipcRenderer } = require('electron');
-const { LYRICS_DEFAULT_API, LYRICS_MIRROR_API } = require('../shared/constants');
+// Inlined on purpose. Cadence's own windows run with Chromium's sandbox on
+// (Electron's default), and a sandboxed preload gets a restricted `require`
+// that can load 'electron' and a few Node built-ins but NOT other files. The
+// relative require this replaced threw "module not found" before
+// contextBridge ran, so window.cadence never existed in the shell, settings,
+// mini-player or lyrics pages (1.4.4 through 1.4.12). Keep these in sync with
+// src/shared/constants.js — test/app-preload.test.js pins both.
+const LYRICS_DEFAULT_API = 'https://lrclib.net/api';
+const LYRICS_MIRROR_API = 'https://lyrics.dvlce.ca/api';
 
 const IPC = {
   GET_STATE: 'app:getState',
