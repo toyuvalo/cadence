@@ -2,6 +2,23 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.12] — 2026-09-16
+
+### Fixed
+- **Music view reloaded itself every few minutes while Cadence was paused and
+  covered by another window.** 1.4.11 re-enabled Chromium background
+  throttling and taught the watchdog to ignore a quiet heartbeat while the
+  window is minimized or hidden — but Chromium also hides a page whose window
+  is merely *occluded*, and after five hidden minutes it throttles the chained
+  heartbeat to one wake per minute. `BrowserWindow.isVisible()` stays true for
+  an occluded window, so the watchdog read the throttled gap as a detached
+  bridge and hit `reloadIgnoringCache()` ("Reconnecting…" overlay, track
+  restored from scratch), then again five minutes later, forever. Audible
+  playback is exempt from throttling, which is why it only showed while paused.
+  The music bridge now reports `visibilitychange` to the supervisor, which
+  skips the bridge-silence check while the page itself says it is hidden and
+  restarts the ping clock when it becomes visible again.
+
 ## [1.4.11] — 2026-09-04
 
 Steady-state CPU and memory work. Cadence's own overhead was mostly a set of

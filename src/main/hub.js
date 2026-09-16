@@ -11,6 +11,7 @@ const CH = {
   // bridge -> main
   STATE: 'ytm:state',
   READY: 'ytm:ready',
+  VISIBILITY: 'ytm:visibility',
   LOG: 'ytm:log',
   // main -> bridge
   COMMAND: 'ytm:command',
@@ -165,6 +166,9 @@ class Hub extends EventEmitter {
 
   wire() {
     ipcMain.on(CH.STATE, (_e, state) => this._ingestState(state));
+    ipcMain.on(CH.VISIBILITY, (_e, hidden) => {
+      if (this._supervisor) this._supervisor.notePageVisibility(!!hidden);
+    });
 
     ipcMain.on(CH.READY, (_e, info) => {
       this.emit('bridge-ready', info);

@@ -41,6 +41,7 @@ const IPC = {
   // ytm preload  ->  main
   STATE: 'ytm:state', // full PlayerState snapshot
   READY: 'ytm:ready', // preload bridge attached
+  VISIBILITY: 'ytm:visibility', // document.hidden of the music view (true/false)
   LOG: 'ytm:log', // forwarded diagnostic line from the bridge
 
   // main  ->  ytm preload

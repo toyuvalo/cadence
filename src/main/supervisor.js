@@ -22,6 +22,7 @@ class Supervisor extends EventEmitter {
     this._recovering = false;
     this._lastGoodLoad = 0;
     this._lastStatePing = 0; // updated by the bridge via noteAlive()
+    this._pageHidden = false; // updated by the bridge via notePageVisibility()
     this._watchdog = null;
     this._reloadTimer = null;
     this._destroyed = false;
@@ -38,6 +39,17 @@ class Supervisor extends EventEmitter {
     this._lastStatePing = Date.now();
   }
 
+  // Called when the music view reports a visibilitychange. A hidden page has
+  // throttled timers (down to one wake a minute after five minutes), so a quiet
+  // bridge is expected, not a detached hook. On becoming visible the ping clock
+  // restarts so the throttled gap itself cannot trip the check before the
+  // first fresh beat lands.
+  notePageVisibility(hidden) {
+    const was = this._pageHidden;
+    this._pageHidden = !!hidden;
+    if (was && !this._pageHidden) this._lastStatePing = Date.now();
+  }
+
   _wc() {
     const wc = this._getWC();
     return wc && !wc.isDestroyed() ? wc : null;
@@ -46,6 +58,7 @@ class Supervisor extends EventEmitter {
   // True when the music view's timers are expected to be throttled by Chromium,
   // so a quiet bridge is normal rather than evidence of a detached hook.
   _isBackgrounded() {
+    if (this._pageHidden) return true;
     try {
       const win = this._getHostWindow();
       if (!win || win.isDestroyed()) return false;
@@ -84,6 +97,7 @@ class Supervisor extends EventEmitter {
       this._lastStatePing = Date.now();
       this._attempts = 0;
       this._recovering = false;
+      this._pageHidden = false; // fresh document; the bridge re-reports on boot
       this._onStatus('ok');
       this._onReloaded();
     });

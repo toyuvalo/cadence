@@ -23,6 +23,7 @@ function diagFile(msg) {
 const IPC = {
   STATE: 'ytm:state',
   READY: 'ytm:ready',
+  VISIBILITY: 'ytm:visibility',
   LOG: 'ytm:log',
   COMMAND: 'ytm:command',
   TOGGLE_LYRICS: 'app:toggleLyrics', // handled by hub.js, same as our own windows
@@ -466,6 +467,14 @@ function pushState() {
   }
 }
 
+function sendVisibility() {
+  try {
+    ipcRenderer.send(IPC.VISIBILITY, document.visibilityState !== 'visible');
+  } catch {
+    /* main may be gone during teardown */
+  }
+}
+
 let attachedVideo = null;
 function attachVideoEvents() {
   const v = getVideo();
@@ -584,6 +593,14 @@ function boot() {
       injectAdCss();
       startAdHandling();
     });
+
+  // Tell the supervisor when Chromium considers this page hidden. Occlusion
+  // (another window fully covering Cadence) hides the page just like
+  // minimizing does, and after five hidden minutes Chromium throttles our
+  // chained heartbeat to one wake per minute. The main process cannot see
+  // occlusion (BrowserWindow.isVisible() stays true), so the page reports it.
+  document.addEventListener('visibilitychange', sendVisibility);
+  sendVisibility();
 
   sentinel();
   scheduleBeat();
