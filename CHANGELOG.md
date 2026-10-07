@@ -2,6 +2,15 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.14] — 2026-10-07
+
+### Security
+- Dependency updates only, no behaviour change. Runtime: `js-yaml` 4.3.2
+  (via `electron-updater`) and `fast-uri` 3.1.8 (via `electron-store` ->
+  `conf` -> `ajv`) pick up upstream security fixes. Build-only:
+  `@xmldom/xmldom` 0.8.15 and `undici` 6.29.0 / 7.30.0 (electron-builder and
+  the Electron download helper), which are not packaged into the app.
+
 ## [1.4.13] — 2026-09-16
 
 ### Fixed
