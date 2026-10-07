@@ -2,6 +2,13 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.15] — 2026-10-07
+
+### Security
+- Dev-tooling dependency update only (lockfile): `brace-expansion` 1.1.21 /
+  2.1.7 / 5.0.12 in eslint and electron-builder's tree. Not packaged into the
+  app, so no release was cut for this version.
+
 ## [1.4.14] — 2026-10-07
 
 ### Security
