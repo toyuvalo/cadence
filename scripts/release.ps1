@@ -101,6 +101,11 @@ $actualSha = [Convert]::ToBase64String([System.Security.Cryptography.SHA512]::Cr
 if ($actualSha -ne $ymlSha) { Die "sha512 mismatch: latest.yml does not describe this installer" }
 Ok 'latest.yml sha512 matches the built installer'
 
+# Signed by scripts/azsign.js. A missing signature means the hook was skipped.
+$sig = Get-AuthenticodeSignature $exe
+if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch '^CN=Yuval Olsha,') { Die "installer signature is $($sig.Status), signer '$($sig.SignerCertificate.Subject)'" }
+Ok 'installer is signed by Yuval Olsha'
+
 if ($DryRun) { Write-Host "`nDry run - nothing published." -ForegroundColor Yellow; exit 0 }
 
 # --- 3. publish --------------------------------------------------------------

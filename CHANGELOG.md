@@ -2,6 +2,13 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.16] — 2026-10-17
+
+### Added
+- The installer, the uninstaller and Cadence.exe are code-signed (publisher
+  "Yuval Olsha", Azure Artifact Signing). Updates from this version on check
+  that the new installer has the same publisher.
+
 ## [1.4.15] — 2026-10-07
 
 ### Security
