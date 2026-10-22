@@ -69,6 +69,45 @@ function clickFirst(selectors, label) {
   return false;
 }
 
+// YTM's own hotkeys, used when no button matches (a redesign or a non-English
+// UI). Synthetic keydowns on the document reach YTM's hotkey handler.
+function pressKey(key) {
+  const code = 'Key' + key.toUpperCase();
+  const keyCode = key.toUpperCase().charCodeAt(0);
+  document.dispatchEvent(new KeyboardEvent('keydown', { key, code, keyCode, which: keyCode, bubbles: true }));
+  log(`control fell back to hotkey "${key}"`);
+}
+
+// 2026-10 redesign: ytmusic-player-bar is gone; transport buttons live in
+// ytmusic-wiz-player-controls inside ytmusic-miniplayer and have no class or id,
+// only title/aria-label. Old selectors stay first for the legacy layout.
+const NEXT_SELECTORS = [
+  '.next-button.ytmusic-player-bar',
+  'tp-yt-paper-icon-button.next-button',
+  '.next-button',
+  'ytmusic-wiz-player-controls button[title="Next"]',
+  'ytmusic-wiz-player-controls button[aria-label="Next"]',
+];
+const PREVIOUS_SELECTORS = [
+  '.previous-button.ytmusic-player-bar',
+  'tp-yt-paper-icon-button.previous-button',
+  '.previous-button',
+  'ytmusic-wiz-player-controls button[title="Previous"]',
+  'ytmusic-wiz-player-controls button[aria-label="Previous"]',
+];
+const LIKE_SELECTORS = [
+  'ytmusic-like-button-renderer #button-shape-like button',
+  '#button-shape-like button',
+  'ytmusic-miniplayer like-button-view-model button',
+  'like-button-view-model button',
+];
+const DISLIKE_SELECTORS = [
+  'ytmusic-like-button-renderer #button-shape-dislike button',
+  '#button-shape-dislike button',
+  'ytmusic-miniplayer dislike-button-view-model button',
+  'dislike-button-view-model button',
+];
+
 // ---- state extraction -----------------------------------------------------
 
 // Artwork selection is pure work over the same array on every tick, so its
@@ -138,6 +177,11 @@ function readLikeState() {
     const status = renderer.getAttribute('like-status');
     if (status && LIKE[status]) return status;
   }
+  // Redesigned layout: no like-status attribute, only aria-pressed per button.
+  const like = pick(LIKE_SELECTORS.slice(2));
+  if (like && like.getAttribute('aria-pressed') === 'true') return LIKE.LIKE;
+  const dislike = pick(DISLIKE_SELECTORS.slice(2));
+  if (dislike && dislike.getAttribute('aria-pressed') === 'true') return LIKE.DISLIKE;
   return LIKE.INDIFFERENT;
 }
 
@@ -402,20 +446,10 @@ function handleCommand(_e, payload) {
         else clickFirst(['#play-pause-button', '.play-pause-button'], 'playPause');
         break;
       case 'next':
-        clickFirst(
-          ['.next-button.ytmusic-player-bar', 'tp-yt-paper-icon-button.next-button', '.next-button'],
-          'next'
-        );
+        if (!clickFirst(NEXT_SELECTORS, 'next')) pressKey('j');
         break;
       case 'previous':
-        clickFirst(
-          [
-            '.previous-button.ytmusic-player-bar',
-            'tp-yt-paper-icon-button.previous-button',
-            '.previous-button',
-          ],
-          'previous'
-        );
+        if (!clickFirst(PREVIOUS_SELECTORS, 'previous')) pressKey('k');
         break;
       case 'seek':
         if (v && isFinite(value)) v.currentTime = Math.max(0, value);
@@ -433,19 +467,10 @@ function handleCommand(_e, payload) {
         if (v) v.muted = !v.muted;
         break;
       case 'like':
-        clickFirst(
-          ['ytmusic-like-button-renderer #button-shape-like button', '#button-shape-like button'],
-          'like'
-        );
+        clickFirst(LIKE_SELECTORS, 'like');
         break;
       case 'dislike':
-        clickFirst(
-          [
-            'ytmusic-like-button-renderer #button-shape-dislike button',
-            '#button-shape-dislike button',
-          ],
-          'dislike'
-        );
+        clickFirst(DISLIKE_SELECTORS, 'dislike');
         break;
       default:
         log('unknown command: ' + action);
@@ -559,6 +584,10 @@ function beat() {
     sentinel();
   }
   pushState();
+  // The timer that just fired is spent. Without clearing it, scheduleBeat()
+  // saw a "live" timer at the same period and returned, so the heartbeat
+  // stopped after one tick and the supervisor reloaded YTM mid-song.
+  beatTimer = null;
   scheduleBeat();
 }
 

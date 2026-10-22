@@ -105,6 +105,14 @@ class Supervisor extends EventEmitter {
     wc.on('did-navigate-in-page', () => {
       this._lastStatePing = Date.now();
     });
+
+    // YTM registers beforeunload handlers while a song is loaded. With no
+    // dialog to show, Electron silently cancels the unload, so every recovery
+    // reload was dropped and the "Reconnecting…" overlay stayed up forever.
+    // Cadence never wants a "leave site?" prompt, so always allow the unload.
+    wc.on('will-prevent-unload', (e) => {
+      e.preventDefault();
+    });
   }
 
   // Re-attach handlers after a webContents is recreated (defensive — current

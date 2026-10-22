@@ -45,6 +45,47 @@ function makeWorld() {
   return { handlers, wc, win, statuses };
 }
 
+for (const replaceWebContents of [false, true]) {
+  test(`recovery completes despite beforeunload on ${replaceWebContents ? 'replacement' : 'initial'} webContents`, (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const Supervisor = loadSupervisor({ 'resilience.watchdogEnabled': false });
+    let world = makeWorld();
+    const statuses = [];
+    let reloaded = 0;
+    const sup = new Supervisor({
+      getWebContents: () => world.wc,
+      onStatus: (status) => statuses.push(status),
+      onReloaded: () => { reloaded += 1; },
+    });
+    t.after(() => sup.destroy());
+    sup.start();
+    if (replaceWebContents) {
+      world = makeWorld();
+      sup.reattach();
+    }
+
+    let reloadRequests = 0;
+    world.wc.reloadIgnoringCache = () => {
+      reloadRequests += 1;
+      // Model Electron cancelling the unload unless the supervisor overrides it.
+      let allowed = false;
+      world.handlers['will-prevent-unload']?.({
+        preventDefault() { allowed = true; },
+      });
+      if (allowed) world.handlers['did-finish-load']();
+    };
+
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      world.handlers['render-process-gone']({}, { reason: 'crashed' });
+      assert.equal(statuses.at(-1), 'recovering');
+      t.mock.timers.tick(30000);
+      assert.equal(reloadRequests, attempt, 'recovery requests one reload');
+      assert.equal(reloaded, attempt, 'beforeunload must allow a completed load');
+      assert.equal(statuses.at(-1), 'ok', 'a completed load clears the recovery overlay');
+    }
+  });
+}
+
 test('watchdog ignores a silent bridge while the page reports itself hidden', async (t) => {
   const Supervisor = loadSupervisor();
   const { handlers, wc, win, statuses } = makeWorld();
