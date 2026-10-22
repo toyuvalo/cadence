@@ -2,6 +2,17 @@
 
 All notable changes to Cadence are documented here.
 
+## [1.4.17] — 2026-10-21
+
+### Fixed
+- Next, Previous, Like and Dislike did nothing. YouTube Music replaced its
+  player bar with `ytmusic-wiz-player-controls`; Cadence now finds the new
+  buttons, and falls back to YouTube Music's `j` / `k` hotkeys for Next and
+  Previous when no button matches.
+- YouTube Music reloaded about a minute into playback. The heartbeat stopped
+  after its first tick, so the watchdog reported `watchdog:bridge-silent` and
+  reloaded the page. The heartbeat now keeps ticking.
+
 ## [1.4.16] — 2026-10-17
 
 ### Added
