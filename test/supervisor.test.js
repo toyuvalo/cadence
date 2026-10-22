@@ -86,7 +86,12 @@ for (const replaceWebContents of [false, true]) {
   });
 }
 
-test('watchdog ignores a silent bridge while the page reports itself hidden', async (t) => {
+test('watchdog ignores a silent bridge while the page reports itself hidden', (t) => {
+  // Mock clock: with real sleeps the 25 ms "grace" step could overrun the
+  // 40 ms threshold on a loaded machine and fail about one run in five.
+  // Non-zero start: the supervisor treats a _lastGoodLoad of 0 as "never loaded".
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: 1_000_000 });
+  const sleep = (ms) => t.mock.timers.tick(ms);
   const Supervisor = loadSupervisor();
   const { handlers, wc, win, statuses } = makeWorld();
   const sup = new Supervisor({
@@ -101,7 +106,7 @@ test('watchdog ignores a silent bridge while the page reports itself hidden', as
   // Occluded window: Chromium hides the page, BrowserWindow.isVisible() stays
   // true, and the heartbeat goes quiet. Before the fix this reloaded the view.
   sup.notePageVisibility(true);
-  await sleep(120); // >> interval*4 (40ms) of bridge silence
+  sleep(120); // >> interval*4 (40ms) of bridge silence
   assert.equal(
     statuses.some(([s]) => s === 'recovering'),
     false,
@@ -111,9 +116,9 @@ test('watchdog ignores a silent bridge while the page reports itself hidden', as
   // Uncovered again: the ping clock restarts, so the throttled gap alone cannot
   // trip the check; only genuine silence after that does.
   sup.notePageVisibility(false);
-  await sleep(25);
+  sleep(25);
   assert.equal(statuses.some(([s]) => s === 'recovering'), false, 'grace period after unhide');
-  await sleep(100);
+  sleep(100);
   const rec = statuses.find(([s]) => s === 'recovering');
   assert.ok(rec, 'a visible page with a silent bridge is still recovered');
   assert.match(rec[1], /bridge-silent/);
